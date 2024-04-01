@@ -2,7 +2,8 @@
 # Functions to interact with the AVR64EA28+PIC18F16Q41 edaq node
 # through a serial RS485 cable.
 #
-# PJ 2023-03-30: Begin with just getting version strings for both MCUs.
+# PJ 2024-03-30: Begin with just getting version strings for both MCUs.
+#    2024-04-01: Fill in more interaction functions, up to sampling.
 #
 import argparse
 import serial
@@ -27,7 +28,9 @@ def openPort(port='/dev/ttyUSB0'):
     return ser
 
 class EDAQSNode(object):
-    __slots__ = ['id_char', 'serial_port', 'n_reg', 'reg_labels']
+    __slots__ = ['id_char', 'serial_port', 'n_reg', 'reg_labels',
+                 'pins', 'channels', 'pga_gains',
+                 'trigger_modes', 'trigger_slopes']
 
     def __init__(self, id_char, serial_port):
         '''
@@ -52,6 +55,39 @@ class EDAQSNode(object):
             28:'CH9+', 29:'CH9-', 30:'CH10+', 31:'CH10-', 32:'CH11+', 33:'CH11-'
         }
         assert self.n_reg == len(self.reg_labels), "Oops, check register labels."
+        # Give names to the analog-in pins to make it easy to specify analog inputs.
+        self.pins = {
+            'AIN28':28, 'PC0':28, 28:28,
+            'AIN29':29, 'PC1':29, 29:29,
+            'AIN30':30, 'PC2':30, 30:30,
+            'AIN31':31, 'PC3':30, 31:31,
+            'AIN0':0, 'PD0':0, 0:0,
+            'AIN1':1, 'PD1':1, 1:1,
+            'AIN2':2, 'PD2':2, 2:2,
+            'AIN3':3, 'PD3':3, 3:3,
+            'AIN4':4, 'PD4':4, 4:4,
+            'AIN5':5, 'PD5':5, 5:5,
+            'AIN6':6, 'PD6':6, 6:6,
+            'AIN7':7, 'PD2':7, 7:7,
+            'GND':48
+        }
+        self.channels = []
+        self.pga_gains = {
+            '1X':0, '1x':0, 1:0,
+            '2X':1, '2x':1, 2:1,
+            '4X':2, '4x':2, 4:2,
+            '8X':3, '8x':3, 8:3,
+            '16X':4, '16x':4, 16:4,
+        }
+        self.trigger_modes = {
+            'IMMEDIATE':0, 0:0,
+            'INTERNAL':1, 1:1,
+            'EXTERNAL':2, 2:2
+        }
+        self.trigger_slopes = {
+            'NEG':0, 'BELOW':0, 0:0,
+            'POS':1, 'ABOVE':1, 1:1
+        }
         return
 
     def send_RS485_command(self, cmd_txt):
@@ -78,7 +114,7 @@ class EDAQSNode(object):
                 txt = re.sub('/0', '', txt).strip()
                 txt = re.sub('#', '', txt).strip()
         else:
-            raise(f'Invalid RS485 response: {txt}')
+            raise RuntimeError(f'Invalid RS485 response: {txt}')
         return txt
 
     def command_PIC(self, cmd_txt):
@@ -86,12 +122,20 @@ class EDAQSNode(object):
         self.send_RS485_command(cmd_txt)
         txt = self.get_RS485_response()
         if not txt.startswith(cmd_char):
-            raise(f'Unexpected response: {txt}')
+            raise RuntimeError(f'Unexpected response: {txt}')
         txt = re.sub(cmd_char, '', txt).strip()
         return txt
 
     def get_PIC_version(self):
         return self.command_PIC('v')
+
+    def set_PIC_LED(self, val):
+        txt = self.command_PIC(f'L{val}')
+        return
+
+    def restart_AVR(self):
+        txt = self.command_PIC('R')
+        return
 
     def command_AVR(self, cmd_txt):
         '''
@@ -99,14 +143,24 @@ class EDAQSNode(object):
         Returns the unwrapped response text.
         '''
         txt = self.command_PIC('X%s' % cmd_txt)
-        if txt.find('ok'):
+        if txt.find('ok') >= 0:
             txt = re.sub('ok', '', txt).strip()
         else:
-            raise(f'AVR response not ok: {txt}')
+            raise RuntimeError(f'AVR response not ok: {txt}')
         return txt
 
     def get_AVR_version(self):
         return self.command_AVR('v')
+
+    def test_AVR_is_ready(self):
+        txt = self.command_PIC('Q')
+        event_txt, ready_txt = txt.split()
+        return ready_txt == '1'
+
+    def test_event_has_passed(self):
+        txt = self.command_PIC('Q')
+        event_txt, ready_txt = txt.split()
+        return event_txt == '0'
 
     def get_AVR_reg(self, i):
         '''
@@ -144,15 +198,119 @@ class EDAQSNode(object):
             print(i, val, self.reg_labels[i])
         return
 
+    def set_AVR_analog_channels(self, chan_list):
+        '''
+        Set the channel registers from a list of input-pin tuples.
+
+        Each tuple names the positive and negative inputs.
+        '''
+        self.channels = []
+        for pos,neg in chan_list:
+            if len(self.channels) == 12: break
+            if type(pos) is str: pos = pos.upper()
+            if type(neg) is str: neg = neg.upper()
+            self.channels.append((self.pins[pos], self.pins[neg]))
+        nchan = len(self.channels)
+        self.set_AVR_reg(1, nchan)
+        for i in range(nchan):
+            self.set_AVR_reg(10+i*2, self.channels[i][0])
+            self.set_AVR_reg(11+i*2, self.channels[i][1])
+        return
+
+    def set_AVR_PGA(self, gain='8X'):
+        '''
+        '''
+        self.set_AVR_reg(7, 1) # via PGA
+        self.set_AVR_reg(8, self.pga_gains[gain])
+        return
+
+    def clear_AVR_PGA(self):
+        '''
+        '''
+        self.set_AVR_reg(7, 0) # direct
+        self.set_AVR_reg(8, 0) # 1X
+        return
+
+    def set_AVR_trigger_immediate(self):
+        '''
+        Set the trigger mode to IMMEDIATE.
+
+        Recording will start immediately that the MCU is told to start sampling
+        and will stop after nsamples have been recorded.
+        '''
+        self.set_AVR_reg(3, self.trigger_modes['IMMEDIATE'])
+        return
+
+    def set_AVR_trigger_internal(self, chan, level, slope):
+        '''
+        Set the trigger mode to INTERNAL.
+
+        Recording will start immediately that the MCU is told to start sampling
+        and will continue indefinitely, until the specified channel crosses
+        the specified level.
+        nsamples with then be recorded and the sampling stops after than.
+        '''
+        # [TODO] some checking for reasonable input.
+        self.set_AVR_reg(3, self.trigger_modes['INTERNAL'])
+        self.set_AVR_reg(4, chan)
+        self.set_AVR-reg(5, level)
+        self.set_AVR_reg(6, self.trigger_slopes[slope])
+        return
+
+    def set_AVR_trigger_external(self):
+        '''
+        Set the trigger mode to EXTERNAL.
+
+        Recording will start immediately that the MCU is told to start sampling
+        and will continue indefinitely, until the EVENT# pin goes low.
+        nsamples with then be recorded and the sampling stops after than.
+        '''
+        self.set_AVR_reg(3, self.trigger_modes['EXTERNAL'])
+        return
+
+    def set_AVR_nsamples(self, n):
+        '''
+        Set the number of samples to be recorded after trigger event.
+        '''
+        # [TODO] some checking for reasonable input.
+        self.set_AVR_reg(2, n)
+        return
+
+    def start_AVR_sampling(self):
+        '''
+        Start the AVR sampling.
+
+        What happens from this point depends on the register settings
+        and, maybe, the external signals.
+        '''
+        self.command_AVR('g')
+        return
+
 if __name__ == '__main__':
     sp = openPort('/dev/ttyUSB0')
     if sp:
         node1 = EDAQSNode('1', sp)
+        node1.set_PIC_LED(1)
         print(node1.get_PIC_version())
         print(node1.get_AVR_version())
         print(node1.get_AVR_reg(0))
         print(node1.set_AVR_reg(0, 1250))
         print(node1.get_AVR_reg(0))
+        node1.clear_AVR_PGA()
         node1.set_AVR_regs_from_dict({1:6, 2:100})
         node1.print_AVR_reg_values()
+        node1.set_AVR_analog_channels([('AIN28','GND'),('ain29','gnd')])
+        node1.set_AVR_nsamples(100)
+        node1.set_AVR_trigger_immediate()
+        node1.print_AVR_reg_values()
+        print("AVR ready: ", node1.test_AVR_is_ready())
+        print("event has passed: ", node1.test_event_has_passed())
+        node1.set_PIC_LED(0)
+        node1.start_AVR_sampling()
+        ready = node1.test_AVR_is_ready()
+        while not ready:
+            print('Waiting...')
+            time.sleep(0.01)
+            ready = node1.test_AVR_is_ready()
+        print("event has passed: ", node1.test_event_has_passed())
 
