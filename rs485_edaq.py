@@ -11,6 +11,10 @@ import time
 import serial.tools.list_ports as list_ports
 import re
 
+# -----------------------------------------------------------------------------
+# The RS485 communication happens through a standard serial port.
+# Use pySerial to handle this connection.
+
 def serial_ports():
     return [p.device for p in list_ports.comports()]
 
@@ -26,6 +30,10 @@ def openPort(port='/dev/ttyUSB0'):
         print(f'Serial ports that can be seen: {serial_ports()}')
         return None
     return ser
+
+# -----------------------------------------------------------------------------
+# Each data-recording node on the RS485 bus will be represented in this program
+# by and instance of the following class.
 
 class EDAQSNode(object):
     __slots__ = ['id_char', 'serial_port', 'n_reg', 'reg_labels',
@@ -90,9 +98,14 @@ class EDAQSNode(object):
         }
         return
 
+    #---------------------------------------------------------
+    # Fundamentally, it's all messages on the RS485 bus.
+
     def send_RS485_command(self, cmd_txt):
         '''
         Send the wrapped command text on the RS485 bus.
+
+        For notes, see PJ's workbook page 76, 2024-01-09.
         '''
         self.serial_port.reset_input_buffer()
         cmd_bytes = f'/{self.id_char}{cmd_txt}!\r'.encode('utf-8')
@@ -105,6 +118,8 @@ class EDAQSNode(object):
         '''
         Returns the unwrapped response text that comes back
         from a previously sent command.
+
+        For notes, see PJ's workbook page 76, 2024-01-09.
         '''
         txt = self.serial_port.readline().strip().decode('utf-8')
         if txt.startswith('/0'):
@@ -116,6 +131,9 @@ class EDAQSNode(object):
         else:
             raise RuntimeError(f'Invalid RS485 response: {txt}')
         return txt
+
+    #-----------------------------------------------------------
+    # PIC18F16Q41 service functions are built on RS485 messages.
 
     def command_PIC(self, cmd_txt):
         cmd_char = cmd_txt[0]
@@ -137,6 +155,18 @@ class EDAQSNode(object):
         txt = self.command_PIC('R')
         return
 
+    def assert_event_line_low(self):
+        txt = self.command_PIC('t')
+        return
+
+    def release_event_line(self):
+        txt = self.command_PIC('c')
+        return
+
+    #---------------------------------------------------------------
+    # AVR DAQ-MCU interaction functions are implemented
+    # by passing commands through the PIC18F16Q41 COMMS-MCU.
+
     def command_AVR(self, cmd_txt):
         '''
         Wraps the cmd_txt as a pass-through-command and sends it.
@@ -148,6 +178,9 @@ class EDAQSNode(object):
         else:
             raise RuntimeError(f'AVR response not ok: {txt}')
         return txt
+
+    #----------------------------------------------------------------
+    # AVR service functions.
 
     def get_AVR_version(self):
         return self.command_AVR('v')
@@ -290,12 +323,24 @@ if __name__ == '__main__':
     sp = openPort('/dev/ttyUSB0')
     if sp:
         node1 = EDAQSNode('1', sp)
+        #
+        print("Just some fiddling around.")
         node1.set_PIC_LED(1)
         print(node1.get_PIC_version())
         print(node1.get_AVR_version())
         print(node1.get_AVR_reg(0))
         print(node1.set_AVR_reg(0, 1250))
         print(node1.get_AVR_reg(0))
+        time.sleep(1.0)
+        node1.set_PIC_LED(0)
+        #
+        print("Exercise the software trigger line.")
+        node1.assert_event_line_low()
+        time.sleep(2) # to let the DVM register the voltage levels
+        node1.release_event_line()
+        time.sleep(2)
+        #
+        print("Example of recording data.")
         node1.clear_AVR_PGA()
         node1.set_AVR_regs_from_dict({1:6, 2:100})
         node1.print_AVR_reg_values()
