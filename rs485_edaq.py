@@ -4,6 +4,7 @@
 #
 # PJ 2024-03-30: Begin with just getting version strings for both MCUs.
 #    2024-04-01: Fill in more interaction functions, up to sampling.
+#    2024-04-03: Functions to get SRAM data.
 #
 import argparse
 import serial
@@ -38,7 +39,7 @@ def openPort(port='/dev/ttyUSB0'):
 class EDAQSNode(object):
     __slots__ = ['id_char', 'serial_port', 'n_reg', 'reg_labels',
                  'pins', 'channels', 'pga_gains',
-                 'trigger_modes', 'trigger_slopes']
+                 'trigger_modes', 'trigger_slopes', 'us_per_tick']
 
     def __init__(self, id_char, serial_port):
         '''
@@ -96,6 +97,7 @@ class EDAQSNode(object):
             'NEG':0, 'BELOW':0, 0:0,
             'POS':1, 'ABOVE':1, 1:1
         }
+        self.us_per_tick = 0.8 # Hardware timer set at this value.
         return
 
     #---------------------------------------------------------
@@ -141,7 +143,7 @@ class EDAQSNode(object):
         txt = self.get_RS485_response()
         if not txt.startswith(cmd_char):
             raise RuntimeError(f'Unexpected response: {txt}')
-        txt = re.sub(cmd_char, '', txt).strip()
+        txt = re.sub(cmd_char, '', txt, count=1).strip()
         return txt
 
     def get_PIC_version(self):
@@ -167,6 +169,20 @@ class EDAQSNode(object):
         txt = self.command_PIC('F')
         return
 
+    def test_AVR_is_ready(self):
+        txt = self.command_PIC('Q')
+        event_txt, ready_txt = txt.split()
+        return ready_txt == '1'
+
+    def reset_AVR(self):
+        txt = self.command_PIC('R')
+        return
+
+    def test_event_has_passed(self):
+        txt = self.command_PIC('Q')
+        event_txt, ready_txt = txt.split()
+        return event_txt == '0'
+
     #---------------------------------------------------------------
     # AVR DAQ-MCU interaction functions are implemented
     # by passing commands through the PIC18F16Q41 COMMS-MCU.
@@ -178,7 +194,7 @@ class EDAQSNode(object):
         '''
         txt = self.command_PIC('X%s' % cmd_txt)
         if txt.find('ok') >= 0:
-            txt = re.sub('ok', '', txt).strip()
+            txt = re.sub('ok', '', txt, count=1).strip()
         else:
             raise RuntimeError(f'AVR response not ok: {txt}')
         return txt
@@ -188,16 +204,6 @@ class EDAQSNode(object):
 
     def get_AVR_version(self):
         return self.command_AVR('v')
-
-    def test_AVR_is_ready(self):
-        txt = self.command_PIC('Q')
-        event_txt, ready_txt = txt.split()
-        return ready_txt == '1'
-
-    def test_event_has_passed(self):
-        txt = self.command_PIC('Q')
-        event_txt, ready_txt = txt.split()
-        return event_txt == '0'
 
     def get_AVR_reg(self, i):
         '''
@@ -213,6 +219,10 @@ class EDAQSNode(object):
         '''
         txt = self.command_AVR(f's {i} {val}')
         return int(txt.split()[1])
+
+    def set_AVR_regs_to_factory_values(self):
+        txt = self.command_AVR('F')
+        return
 
     def set_AVR_regs_from_dict(self, d):
         '''
@@ -233,6 +243,14 @@ class EDAQSNode(object):
         for i in range(self.n_reg):
             val = self.get_AVR_reg(i)
             print(i, val, self.reg_labels[i])
+        return
+
+    def set_AVR_sample_period_us(self, dt_us):
+        '''
+        '''
+        ticks = int(dt_us / self.us_per_tick)
+        # [TODO] should put some checks on this.
+        self.set_AVR_reg(0, ticks)
         return
 
     def set_AVR_analog_channels(self, chan_list):
@@ -329,6 +347,43 @@ class EDAQSNode(object):
         self.command_AVR('g')
         return
 
+    def get_AVR_nchannels(self):
+        return self.get_AVR_reg(1)
+
+    def get_AVR_byte_size_of_sample_set(self):
+        return int(self.command_AVR('b'))
+
+    def get_AVR_max_nsamples(self):
+        return int(self.command_AVR('m'))
+
+    def get_AVR_size_of_SRAM_in_bytes(self):
+        return int(self.command_AVR('T'))
+
+    def get_AVR_nsamples(self):
+        return self.get_AVR_reg(2)
+
+    def get_AVR_trigger_mode(self):
+        return self.get_AVR_reg(3)
+
+    def get_AVR_formatted_sample(self, i):
+        return [int(item) for item in self.command_AVR(f'P {i}').split()]
+
+    def get_recorded_data(self):
+        '''
+        Returns a list of lists containing the recorded values for each channel.
+        '''
+        nchan = self.get_AVR_nchannels()
+        _data = [[] for c in range(nchan)]
+        #
+        nsamples = self.get_AVR_nsamples()
+        max_samples = self.get_AVR_max_nsamples()
+        mode = self.get_AVR_trigger_mode()
+        N = nsamples if mode==0 else max_samples
+        for i in range(N):
+            sample_values = self.get_AVR_formatted_sample(i)
+            for j in range(nchan): _data[j].append(sample_values[j])
+        return _data
+
 if __name__ == '__main__':
     sp = openPort('/dev/ttyUSB0')
     if sp:
@@ -342,8 +397,10 @@ if __name__ == '__main__':
         node1.flush_rx2_buffer()
         print(node1.get_AVR_version())
         print(node1.get_AVR_reg(0))
-        print(node1.set_AVR_reg(0, 1250))
+        print(node1.set_AVR_reg(0, 250))
         print(node1.get_AVR_reg(0))
+        node1.set_AVR_regs_to_factory_values()
+        node1.print_AVR_reg_values()
         time.sleep(1.0)
         node1.set_PIC_LED(0)
         #
@@ -362,13 +419,13 @@ if __name__ == '__main__':
             print('analog values=', node1.immediate_AVR_sample_set())
             time.sleep(0.5)
         #
-        print("Example of recording data.")
-        node1.set_AVR_nsamples(100)
+        print("Example of a short recording.")
+        node1.set_AVR_sample_period_us(1000)
+        node1.set_AVR_nsamples(20)
         node1.set_AVR_trigger_immediate()
         node1.print_AVR_reg_values()
         print("AVR ready: ", node1.test_AVR_is_ready())
         print("event has passed: ", node1.test_event_has_passed())
-        node1.set_PIC_LED(0)
         node1.start_AVR_sampling()
         ready = node1.test_AVR_is_ready()
         while not ready:
@@ -376,4 +433,51 @@ if __name__ == '__main__':
             time.sleep(0.01)
             ready = node1.test_AVR_is_ready()
         print("event has passed: ", node1.test_event_has_passed())
-
+        nchan = node1.get_AVR_nchannels()
+        nsamples = node1.get_AVR_nsamples()
+        mode = node1.get_AVR_trigger_mode()
+        print(f"nchan={nchan}, nsamples={nsamples}, trigger_mode={mode}")
+        bytes_per_sample = node1.get_AVR_byte_size_of_sample_set()
+        max_samples = node1.get_AVR_max_nsamples()
+        size_of_SRAM = node1.get_AVR_size_of_SRAM_in_bytes()
+        print(f"bytes_per_sample={bytes_per_sample}, size_of_SRAM={size_of_SRAM}")
+        print(f"max_samples={max_samples}")
+        for i in range(nsamples):
+            items = node1.get_AVR_formatted_sample(i)
+            print(items)
+        #
+        node1.reset_AVR()
+        time.sleep(2.0)
+        node1.flush_rx2_buffer()
+        print("Make a longer recording.")
+        node1.set_AVR_sample_period_us(1000)
+        node1.set_AVR_nsamples(2000)
+        node1.set_AVR_trigger_immediate()
+        node1.set_AVR_analog_channels([('AIN28','GND'),('ain29','gnd')])
+        node1.print_AVR_reg_values()
+        print("AVR ready: ", node1.test_AVR_is_ready())
+        print("event has passed: ", node1.test_event_has_passed())
+        node1.start_AVR_sampling()
+        ready = node1.test_AVR_is_ready()
+        while not ready:
+            print('Waiting...')
+            time.sleep(0.1)
+            ready = node1.test_AVR_is_ready()
+        print("event has passed: ", node1.test_event_has_passed())
+        nchan = node1.get_AVR_nchannels()
+        nsamples = node1.get_AVR_nsamples()
+        mode = node1.get_AVR_trigger_mode()
+        print(f"nchan={nchan}, nsamples={nsamples}, trigger_mode={mode}")
+        #
+        print("With that recorded data, make a plot.")
+        import matplotlib.pyplot as plt
+        my_data = node1.get_recorded_data()
+        print("my_data=", my_data)
+        fig, (ax0,ax1) = plt.subplots(2,1)
+        ax0.set_title('AVR64EA28 eDAQS sampled data')
+        ax0.plot(my_data[0]); ax0.set_ylabel('chan 0')
+        ax1.plot(my_data[1]); ax1.set_ylabel('chan 1')
+        ax1.set_xlabel('sample number')
+        plt.show()
+    else:
+        print("Did not find the serial port.")
