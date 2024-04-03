@@ -163,6 +163,10 @@ class EDAQSNode(object):
         txt = self.command_PIC('c')
         return
 
+    def flush_rx2_buffer(self):
+        txt = self.command_PIC('F')
+        return
+
     #---------------------------------------------------------------
     # AVR DAQ-MCU interaction functions are implemented
     # by passing commands through the PIC18F16Q41 COMMS-MCU.
@@ -264,6 +268,12 @@ class EDAQSNode(object):
         self.set_AVR_reg(8, 0) # 1X
         return
 
+    def immediate_AVR_sample_set(self):
+        '''
+        '''
+        txt = self.command_AVR('I')
+        return txt
+
     def set_AVR_trigger_immediate(self):
         '''
         Set the trigger mode to IMMEDIATE.
@@ -327,6 +337,9 @@ if __name__ == '__main__':
         print("Just some fiddling around.")
         node1.set_PIC_LED(1)
         print(node1.get_PIC_version())
+        # If we have been reprogramming the AVR while the PIC18 is running,
+        # we will likely have rubbish characters in the PIC18's RX2 buffer.
+        node1.flush_rx2_buffer()
         print(node1.get_AVR_version())
         print(node1.get_AVR_reg(0))
         print(node1.set_AVR_reg(0, 1250))
@@ -340,11 +353,16 @@ if __name__ == '__main__':
         node1.release_event_line()
         time.sleep(2)
         #
-        print("Example of recording data.")
+        print("Example of looking at the current analog voltages.")
         node1.clear_AVR_PGA()
         node1.set_AVR_regs_from_dict({1:6, 2:100})
-        node1.print_AVR_reg_values()
         node1.set_AVR_analog_channels([('AIN28','GND'),('ain29','gnd')])
+        node1.print_AVR_reg_values()
+        for i in range(5):
+            print('analog values=', node1.immediate_AVR_sample_set())
+            time.sleep(0.5)
+        #
+        print("Example of recording data.")
         node1.set_AVR_nsamples(100)
         node1.set_AVR_trigger_immediate()
         node1.print_AVR_reg_values()
