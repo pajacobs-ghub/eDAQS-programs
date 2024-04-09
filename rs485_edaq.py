@@ -138,12 +138,28 @@ class EDAQSNode(object):
     # PIC18F16Q41 service functions are built on RS485 messages.
 
     def command_PIC(self, cmd_txt):
+        '''
+        Sends the text of a command to the RS485 send function.
+        Returns the text of the RS485 return message.
+
+        Each command to the PIC MCU is encoded as the first character
+        of the command text. Any required data follows that character.
+
+        A return message should start with the same command character
+        and may have more text following that character.
+        A command that is not successful should send back a message
+        with the word "error" in it, together with some more information.
+        '''
         cmd_char = cmd_txt[0]
         self.send_RS485_command(cmd_txt)
         txt = self.get_RS485_response()
         if not txt.startswith(cmd_char):
             raise RuntimeError(f'Unexpected response: {txt}')
         txt = re.sub(cmd_char, '', txt, count=1).strip()
+        if txt.find('error') >= 0:
+            print("Warning: error return for command to PIC MCU.")
+            print(f"  cmd_txt: {cmd_txt}")
+            print(f"  response: {txt}")
         return txt
 
     def get_PIC_version(self):
