@@ -153,16 +153,16 @@ class EDAQSNode(object):
         txt = self.command_PIC(f'L{val}')
         return
 
-    def restart_AVR(self):
-        txt = self.command_PIC('R')
-        return
-
     def assert_event_line_low(self):
         txt = self.command_PIC('t')
         return
 
     def release_event_line(self):
         txt = self.command_PIC('c')
+        return
+
+    def reset_AVR(self):
+        txt = self.command_PIC('R')
         return
 
     def flush_rx2_buffer(self):
@@ -174,14 +174,59 @@ class EDAQSNode(object):
         event_txt, ready_txt = txt.split()
         return ready_txt == '1'
 
-    def reset_AVR(self):
-        txt = self.command_PIC('R')
-        return
-
     def test_event_has_passed(self):
         txt = self.command_PIC('Q')
         event_txt, ready_txt = txt.split()
         return event_txt == '0'
+
+    def set_PIC_VREF_on(self, level):
+        '''
+        Enable the analog-voltage output of the PIC MCU.
+        level is an 8-bit integer 0-255.
+        The output is set at (level/256 * 4.096) Volts.
+        '''
+        level = int(level)
+        if level < 0: level = 0
+        if level > 255: level = 255
+        txt = self.command_PIC(f'w {level} 1')
+        return
+
+    def set_PIC_VREF_off(self):
+        '''
+        Disable the analog-voltage output of the PIC MCU.
+        '''
+        txt = self.command_PIC(f'w 0 0')
+        return
+
+    def enable_external_trigger(self, level, slope):
+        '''
+        Enable the external-trigger input to the PIC MCU.
+
+        level is an 8-bit integer 0-255.
+        The analog trigger is set at (level/256 * 4.096) Volts.
+
+        With positive slope the EVENT# line is driven active-low
+        when the external voltage exceeds the trigger level.
+        With negative slope the EVENT# line is driven active-low
+        when the external voltage becomes less than the trigger level.
+
+        The comparator and latch will not be successfully enabled
+        if the external-voltage condition already exceeds the level.
+        '''
+        level = int(level)
+        if level < 0: level = 0
+        if level > 255: level = 255
+        options = {'positive': 1, 'pos':1, '1':1, 1:1,
+                   'negative':0, 'neg':0, '0':0, 0:0}
+        slope = options[slope]
+        txt = self.command_PIC(f'e {level} {slope}')
+        if txt.find('error') >= 0:
+            raise RuntimeError('Could not set external trigger.')
+        return
+
+    def disable_external_trigger(self):
+        txt = self.command_PIC(f'd')
+        return
 
     #---------------------------------------------------------------
     # AVR DAQ-MCU interaction functions are implemented
