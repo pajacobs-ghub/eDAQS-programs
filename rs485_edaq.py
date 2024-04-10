@@ -445,6 +445,42 @@ class EDAQSNode(object):
             for j in range(nchan): _data[j].append(sample_values[j])
         return _data
 
+    def fetch_SRAM_data(self):
+        '''
+        Returns a bytearray containing the SRAM data, unwrapped,
+        along with enough metadata to interpret the bytes as samples.
+        The oldest recorded data is at the beginning of the bytearray.
+
+        Note that, with the page-size being 32 bits and
+        bytes_per_sample_set not necessarily being 32,
+        There may be a few bytes in the first page returned that
+        belong to the far end of the bytearray.
+        2024-04-10: I am going to ignore this issue for the moment.
+        If it becomes a significant problem, we will revisit the issue.
+        '''
+        txt = self.command_AVR('a')
+        start_addr = int(txt)
+        if start_addr > 0: start_addr = int(start_addr/32) * 32
+        txt = self.command_AVR('T')
+        total_bytes = int(txt)
+        _ba = bytearray(total_bytes)
+        txt = self.command_AVR('N')
+        total_pages = int(txt)
+        txt = self.command_AVR('b')
+        bytes_per_sample_set = int(txt)
+        for i in range(total_pages):
+            if i > 0 and (i % 100) == 0: print(f"page {i}")
+            addr = start_addr + i * 32
+            if addr >= total_bytes: addr -= total_bytes
+            txt = self.command_AVR(f'M {addr}')
+            b = bytearray.fromhex(txt)
+            for j in range(32): _ba[addr+j] = b[j]
+        # [TODO] Consider what other metadata to include.
+        return {"nbytes":total_bytes,
+                "npages":total_pages,
+                "bytes_per_sample_set":bytes_per_sample_set,
+                "data":_ba}
+
 if __name__ == '__main__':
     sp = openPort('/dev/ttyUSB0')
     if sp:
