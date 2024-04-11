@@ -448,8 +448,8 @@ class EDAQSNode(object):
 
     def fetch_SRAM_data(self):
         '''
-        Returns a bytearray containing the SRAM data, unwrapped,
-        along with enough metadata to interpret the bytes as samples.
+        Returns a bytearray containing the SRAM data, along with
+        enough metadata to interpret the bytes as samples.
         '''
         txt = self.command_AVR('a')
         addr_of_oldest_data = int(txt)
