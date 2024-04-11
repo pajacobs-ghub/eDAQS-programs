@@ -11,6 +11,7 @@ import serial
 import time
 import serial.tools.list_ports as list_ports
 import re
+import struct
 
 # -----------------------------------------------------------------------------
 # The RS485 communication happens through a standard serial port.
@@ -449,18 +450,9 @@ class EDAQSNode(object):
         '''
         Returns a bytearray containing the SRAM data, unwrapped,
         along with enough metadata to interpret the bytes as samples.
-        The oldest recorded data is at the beginning of the bytearray.
-
-        Note that, with the page-size being 32 bits and
-        bytes_per_sample_set not necessarily being 32,
-        There may be a few bytes in the first page returned that
-        belong to the far end of the bytearray.
-        2024-04-10: I am going to ignore this issue for the moment.
-        If it becomes a significant problem, we will revisit the issue.
         '''
         txt = self.command_AVR('a')
-        start_addr = int(txt)
-        if start_addr > 0: start_addr = int(start_addr/32) * 32
+        addr_of_oldest_data = int(txt)
         txt = self.command_AVR('T')
         total_bytes = int(txt)
         _ba = bytearray(total_bytes)
@@ -470,16 +462,54 @@ class EDAQSNode(object):
         bytes_per_sample_set = int(txt)
         for i in range(total_pages):
             if i > 0 and (i % 100) == 0: print(f"page {i}")
-            addr = start_addr + i * 32
+            addr = i * 32
             if addr >= total_bytes: addr -= total_bytes
             txt = self.command_AVR(f'M {addr}')
             b = bytearray.fromhex(txt)
             for j in range(32): _ba[addr+j] = b[j]
-        # [TODO] Consider what other metadata to include.
-        return {"nbytes":total_bytes,
-                "npages":total_pages,
+        # Other metadata to include with the bytearray.
+        nchan = self.get_AVR_nchannels()
+        nsamples = self.get_AVR_nsamples()
+        total_samples = self.get_AVR_max_nsamples()
+        mode = self.get_AVR_trigger_mode()
+        return {"total_bytes":total_bytes,
+                "total_pages":total_pages,
                 "bytes_per_sample_set":bytes_per_sample_set,
+                "addr_of_oldest_data":addr_of_oldest_data,
+                "total_samples":total_samples,
+                "nchan":nchan,
+                "nsamples_after_trigger":nsamples,
+                "trigger_mode":mode,
                 "data":_ba}
+
+    def unpack_to_samples(self, data):
+        '''
+        Given the dictionary containing the SRAM bytes and metadata,
+        unpack those bytes into the channels of samples.
+
+        The data is unwrapped such that the oldest sample is at index 0.
+        Depending on the trigger mode, the index at the trigger event
+        may be nonzero.
+        '''
+        nbytes = data['total_bytes']
+        bpss = data['bytes_per_sample_set']
+        addr_start = data['addr_of_oldest_data']
+        nchan = data["nchan"]
+        total_samples = data["total_samples"]
+        # Note that the integers are stored in the SRAM chip in big-endian format.
+        s = struct.Struct(f'>{nchan}h')
+        _samples = [[] for c in range(nchan)]
+        for i in range(total_samples):
+            # Unwrap the stored data so that the oldest data is at sample[0].
+            addr = addr_start + bpss * i
+            if addr >= nbytes: addr -= nbytes
+            items = s.unpack_from(data['data'], offset=addr)
+            for j in range(nchan): _samples[j].append(items[j])
+        return {"nchan":nchan,
+                "total_samples":total_samples,
+                "nsamples_after_trigger":data["nsamples_after_trigger"],
+                "trigger_mode":data["trigger_mode"],
+                "data":_samples}
 
 if __name__ == '__main__':
     sp = openPort('/dev/ttyUSB0')
