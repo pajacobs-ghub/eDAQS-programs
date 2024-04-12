@@ -175,7 +175,7 @@ class EDAQSNode(object):
         return
 
     def release_event_line(self):
-        txt = self.command_PIC('c')
+        txt = self.command_PIC('z')
         return
 
     def reset_AVR(self):

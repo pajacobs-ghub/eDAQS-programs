@@ -16,7 +16,7 @@ if __name__ == '__main__':
         # does not pre-trigger this test.
         node1.reset_AVR()
         time.sleep(2.0)
-        # Make sure that PIC has not been asked to hole EVENT# low.
+        # Make sure that PIC has not been asked to hold EVENT# low.
         node1.release_event_line()
         node1.disable_external_trigger()
         #
