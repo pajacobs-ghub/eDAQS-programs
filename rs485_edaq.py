@@ -409,6 +409,9 @@ class EDAQSNode(object):
         self.command_AVR('g')
         return
 
+    def AVR_did_not_keep_up_during_sampling(self):
+        return (int(self.command_AVR('k')) == 1)
+
     def get_AVR_nchannels(self):
         return self.get_AVR_reg(1)
 

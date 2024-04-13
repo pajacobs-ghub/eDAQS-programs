@@ -42,6 +42,7 @@ def main(sp):
         time.sleep(0.1)
         ready = node1.test_AVR_is_ready()
     #
+    print(f"AVR late sampling={node1.AVR_did_not_keep_up_during_sampling()}")
     print("About to fetch data...")
     start = time.time()
     my_data = node1.fetch_SRAM_data()
