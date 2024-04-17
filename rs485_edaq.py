@@ -5,6 +5,7 @@
 # PJ 2024-03-30: Begin with just getting version strings for both MCUs.
 #    2024-04-01: Fill in more interaction functions, up to sampling.
 #    2024-04-03: Functions to get SRAM data.
+#    2024-04-18: refactor to enable different DAC_MCU flavours
 #
 import argparse
 import serial
@@ -38,9 +39,7 @@ def openPort(port='/dev/ttyUSB0'):
 # by and instance of the following class.
 
 class EDAQSNode(object):
-    __slots__ = ['id_char', 'serial_port', 'n_reg', 'reg_labels',
-                 'pins', 'channels', 'pga_gains',
-                 'trigger_modes', 'trigger_slopes', 'us_per_tick']
+    __slots__ = ['id_char', 'serial_port']
 
     def __init__(self, id_char, serial_port):
         '''
@@ -52,53 +51,6 @@ class EDAQSNode(object):
         '''
         self.id_char = id_char
         self.serial_port = serial_port
-        # The following data should match the firmeare programmed into the AVR.
-        # A dictionary is used so that it is easy to cross-check the labels.
-        self.n_reg = 34
-        self.reg_labels = {
-            0:'PER_TICKS', 1:'NCHANNELS', 2:'NSAMPLES',
-            3:'TRIG_MODE', 4:'TRIG_CHAN', 5:'TRIG_LEVEL', 6:'TRIG_SLOPE',
-            7:'PGA_FLAG', 8:'PGA_GAIN', 9:'V_REF',
-            10:'CH0+', 11:'CH0-', 12:'CH1+', 13:'CH1-', 14:'CH2+', 15:'CH2-',
-            16:'CH3+', 17:'CH3-', 18:'CH4+', 19:'CH4-', 20:'CH5+', 21:'CH5-',
-            22:'CH6+', 23:'CH6-', 24:'CH7+', 25:'CH7-', 26:'CH8+', 27:'CH8-',
-            28:'CH9+', 29:'CH9-', 30:'CH10+', 31:'CH10-', 32:'CH11+', 33:'CH11-'
-        }
-        assert self.n_reg == len(self.reg_labels), "Oops, check register labels."
-        # Give names to the analog-in pins to make it easy to specify analog inputs.
-        self.pins = {
-            'AIN28':28, 'PC0':28, 28:28,
-            'AIN29':29, 'PC1':29, 29:29,
-            'AIN30':30, 'PC2':30, 30:30,
-            'AIN31':31, 'PC3':30, 31:31,
-            'AIN0':0, 'PD0':0, 0:0,
-            'AIN1':1, 'PD1':1, 1:1,
-            'AIN2':2, 'PD2':2, 2:2,
-            'AIN3':3, 'PD3':3, 3:3,
-            'AIN4':4, 'PD4':4, 4:4,
-            'AIN5':5, 'PD5':5, 5:5,
-            'AIN6':6, 'PD6':6, 6:6,
-            'AIN7':7, 'PD2':7, 7:7,
-            'GND':48
-        }
-        self.channels = []
-        self.pga_gains = {
-            '1X':0, '1x':0, 1:0,
-            '2X':1, '2x':1, 2:1,
-            '4X':2, '4x':2, 4:2,
-            '8X':3, '8x':3, 8:3,
-            '16X':4, '16x':4, 16:4,
-        }
-        self.trigger_modes = {
-            'IMMEDIATE':0, 0:0,
-            'INTERNAL':1, 1:1,
-            'EXTERNAL':2, 2:2
-        }
-        self.trigger_slopes = {
-            'NEG':0, 'BELOW':0, 0:0,
-            'POS':1, 'ABOVE':1, 1:1
-        }
-        self.us_per_tick = 0.8 # Hardware timer set at this value.
         return
 
     #---------------------------------------------------------
@@ -178,7 +130,7 @@ class EDAQSNode(object):
         txt = self.command_PIC('z')
         return
 
-    def reset_AVR(self):
+    def reset_DAQ_MCU(self):
         txt = self.command_PIC('R')
         return
 
@@ -186,7 +138,7 @@ class EDAQSNode(object):
         txt = self.command_PIC('F')
         return
 
-    def test_AVR_is_ready(self):
+    def test_DAQ_MCU_is_ready(self):
         txt = self.command_PIC('Q')
         event_txt, ready_txt = txt.split()
         return ready_txt == '1'
@@ -246,10 +198,10 @@ class EDAQSNode(object):
         return
 
     #---------------------------------------------------------------
-    # AVR DAQ-MCU interaction functions are implemented
+    # DAQ-MCU interaction functions are implemented
     # by passing commands through the PIC18F16Q41 COMMS-MCU.
 
-    def command_AVR(self, cmd_txt):
+    def command_DAQ_MCU(self, cmd_txt):
         '''
         Wraps the cmd_txt as a pass-through-command and sends it.
         Returns the unwrapped response text.
@@ -258,20 +210,80 @@ class EDAQSNode(object):
         if txt.find('ok') >= 0:
             txt = re.sub('ok', '', txt, count=1).strip()
         else:
-            raise RuntimeError(f'AVR response not ok: {txt}')
+            raise RuntimeError(f'DAQ_MCU response not ok: {txt}')
         return txt
 
-    #----------------------------------------------------------------
-    # AVR service functions.
+#----------------------------------------------------------------
+# DAC_MCU service functions for an AVR64EA28 microcontroller.
+
+class AVR64EA28_DAQ_MCU(object):
+    __slots__ = ['comms_MCU', 'n_reg', 'reg_labels',
+                 'pins', 'channels', 'pga_gains',
+                 'trigger_modes', 'trigger_slopes', 'us_per_tick']
+
+    def __init__(self, comms_MCU):
+        '''
+        We do all of the interaction with the DAQ_MCU through the COMMS_MCU.
+        '''
+        self.comms_MCU = comms_MCU
+        #
+        # The following data should match the firmware programmed into the AVR.
+        # A dictionary is used so that it is easy to cross-check the labels.
+        self.n_reg = 34
+        self.reg_labels = {
+            0:'PER_TICKS', 1:'NCHANNELS', 2:'NSAMPLES',
+            3:'TRIG_MODE', 4:'TRIG_CHAN', 5:'TRIG_LEVEL', 6:'TRIG_SLOPE',
+            7:'PGA_FLAG', 8:'PGA_GAIN', 9:'V_REF',
+            10:'CH0+', 11:'CH0-', 12:'CH1+', 13:'CH1-', 14:'CH2+', 15:'CH2-',
+            16:'CH3+', 17:'CH3-', 18:'CH4+', 19:'CH4-', 20:'CH5+', 21:'CH5-',
+            22:'CH6+', 23:'CH6-', 24:'CH7+', 25:'CH7-', 26:'CH8+', 27:'CH8-',
+            28:'CH9+', 29:'CH9-', 30:'CH10+', 31:'CH10-', 32:'CH11+', 33:'CH11-'
+        }
+        assert self.n_reg == len(self.reg_labels), "Oops, check register labels."
+        # Give names to the analog-in pins to make it easy to specify analog inputs.
+        self.pins = {
+            'AIN28':28, 'PC0':28, 28:28,
+            'AIN29':29, 'PC1':29, 29:29,
+            'AIN30':30, 'PC2':30, 30:30,
+            'AIN31':31, 'PC3':30, 31:31,
+            'AIN0':0, 'PD0':0, 0:0,
+            'AIN1':1, 'PD1':1, 1:1,
+            'AIN2':2, 'PD2':2, 2:2,
+            'AIN3':3, 'PD3':3, 3:3,
+            'AIN4':4, 'PD4':4, 4:4,
+            'AIN5':5, 'PD5':5, 5:5,
+            'AIN6':6, 'PD6':6, 6:6,
+            'AIN7':7, 'PD2':7, 7:7,
+            'GND':48
+        }
+        self.channels = []
+        self.pga_gains = {
+            '1X':0, '1x':0, 1:0,
+            '2X':1, '2x':1, 2:1,
+            '4X':2, '4x':2, 4:2,
+            '8X':3, '8x':3, 8:3,
+            '16X':4, '16x':4, 16:4,
+        }
+        self.trigger_modes = {
+            'IMMEDIATE':0, 0:0,
+            'INTERNAL':1, 1:1,
+            'EXTERNAL':2, 2:2
+        }
+        self.trigger_slopes = {
+            'NEG':0, 'BELOW':0, 0:0,
+            'POS':1, 'ABOVE':1, 1:1
+        }
+        self.us_per_tick = 0.8 # Hardware timer set at this value.
+        return
 
     def get_AVR_version(self):
-        return self.command_AVR('v')
+        return self.comms_MCU.command_DAQ_MCU('v')
 
     def get_AVR_reg(self, i):
         '''
         Returns the value of the i-th pseudo-register.
         '''
-        txt = self.command_AVR(f'r {i}')
+        txt = self.comms_MCU.command_DAQ_MCU(f'r {i}')
         return int(txt)
 
     def set_AVR_reg(self, i, val):
@@ -279,11 +291,11 @@ class EDAQSNode(object):
         Sets the value of the i-th pseudo-register and
         returns the value reported.
         '''
-        txt = self.command_AVR(f's {i} {val}')
+        txt = self.comms_MCU.command_DAQ_MCU(f's {i} {val}')
         return int(txt.split()[1])
 
     def set_AVR_regs_to_factory_values(self):
-        txt = self.command_AVR('F')
+        txt = self.comms_MCU.command_DAQ_MCU('F')
         return
 
     def set_AVR_regs_from_dict(self, d):
@@ -406,23 +418,23 @@ class EDAQSNode(object):
         What happens from this point depends on the register settings
         and, maybe, the external signals.
         '''
-        self.command_AVR('g')
+        self.comms_MCU.command_DAQ_MCU('g')
         return
 
     def AVR_did_not_keep_up_during_sampling(self):
-        return (int(self.command_AVR('k')) == 1)
+        return (int(self.comms_MCU.command_DAQ_MCU('k')) == 1)
 
     def get_AVR_nchannels(self):
         return self.get_AVR_reg(1)
 
     def get_AVR_byte_size_of_sample_set(self):
-        return int(self.command_AVR('b'))
+        return int(self.comms_MCU.command_DAQ_MCU('b'))
 
     def get_AVR_max_nsamples(self):
-        return int(self.command_AVR('m'))
+        return int(self.comms_MCU.command_DAQ_MCU('m'))
 
     def get_AVR_size_of_SRAM_in_bytes(self):
-        return int(self.command_AVR('T'))
+        return int(self.comms_MCU.command_DAQ_MCU('T'))
 
     def get_AVR_nsamples(self):
         return self.get_AVR_reg(2)
@@ -431,7 +443,7 @@ class EDAQSNode(object):
         return self.get_AVR_reg(3)
 
     def get_AVR_formatted_sample(self, i):
-        return [int(item) for item in self.command_AVR(f'P {i}').split()]
+        return [int(item) for item in self.comms_MCU.command_DAQ_MCU(f'P {i}').split()]
 
     def get_recorded_data(self):
         '''
@@ -454,20 +466,20 @@ class EDAQSNode(object):
         Returns a bytearray containing the SRAM data, along with
         enough metadata to interpret the bytes as samples.
         '''
-        txt = self.command_AVR('a')
+        txt = self.comms_MCU.command_DAQ_MCU('a')
         addr_of_oldest_data = int(txt)
-        txt = self.command_AVR('T')
+        txt = self.comms_MCU.command_DAQ_MCU('T')
         total_bytes = int(txt)
         _ba = bytearray(total_bytes)
-        txt = self.command_AVR('N')
+        txt = self.comms_MCU.command_DAQ_MCU('N')
         total_pages = int(txt)
-        txt = self.command_AVR('b')
+        txt = self.comms_MCU.command_DAQ_MCU('b')
         bytes_per_sample_set = int(txt)
         for i in range(total_pages):
             if i > 0 and (i % 100) == 0: print(f"page {i}")
             addr = i * 32
             if addr >= total_bytes: addr -= total_bytes
-            txt = self.command_AVR(f'M {addr}')
+            txt = self.comms_MCU.command_DAQ_MCU(f'M {addr}')
             b = bytearray.fromhex(txt)
             for j in range(32): _ba[addr+j] = b[j]
         # Other metadata to include with the bytearray.
@@ -515,21 +527,35 @@ class EDAQSNode(object):
                 "data":_samples}
 
 if __name__ == '__main__':
-    sp = openPort('/dev/ttyUSB0')
+    # A basic test to see if the eDAQS node is attached and awake.
+    # Typical use on a Linux box:
+    # $ python3 rs485_edaq.py -i 2
+    import argparse
+    parser = argparse.ArgumentParser(description="eDAQS node test program")
+    parser.add_argument('-p', '--port', dest='port', help='name for serial port')
+    parser.add_argument('-i', '--identity', dest='identity', help='single-character identity')
+    args = parser.parse_args()
+    port_name = '/dev/ttyUSB0'
+    if args.port: port_name = args.port
+    node_id = '1'
+    if args.identity: node_id = args.identity
+    sp = openPort(port_name)
     if sp:
-        node1 = EDAQSNode('1', sp)
+        node1 = EDAQSNode(node_id, sp)
         #
         print("Just some fiddling around to see that board is alive.")
         node1.set_PIC_LED(1)
         print(node1.get_PIC_version())
-        # If we have been reprogramming the AVR while the PIC18 is running,
+        # If we have been reprogramming the DAQ_MCU while the PIC18 is running,
         # we will likely have rubbish characters in the PIC18's RX2 buffer.
-        if not node1.test_AVR_is_ready():
-            print("Reset AVR")
-            node1.reset_AVR()
+        if not node1.test_DAQ_MCU_is_ready():
+            print("Reset DAQ_MCU")
+            node1.reset_DAQ_MCU()
             time.sleep(2.0)
         node1.flush_rx2_buffer()
-        print(node1.get_AVR_version())
+        print(node1.command_DAQ_MCU('v'))
+        time.sleep(1.0)
+        node1.set_PIC_LED(0)
     else:
         print("Did not find the serial port.")
     print("Done.")
