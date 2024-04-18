@@ -363,7 +363,7 @@ class AVR64EA28_DAQ_MCU(object):
     def immediate_AVR_sample_set(self):
         '''
         '''
-        txt = self.command_AVR('I')
+        txt = self.comms_MCU.command_DAQ_MCU('I')
         return txt
 
     def set_AVR_trigger_immediate(self):
