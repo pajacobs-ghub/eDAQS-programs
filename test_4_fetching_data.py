@@ -2,41 +2,42 @@
 
 from rs485_edaq import *
 
-def main(sp):
-    node1 = EDAQSNode('1', sp)
+def main(sp, node_id):
+    node1 = EDAQSNode(node_id, sp)
     #
     print("Example of fetching all of the data after a recording.")
     print(node1.get_PIC_version())
-    if not node1.test_AVR_is_ready():
-        print("Reset AVR")
-        node1.reset_AVR()
+    if not node1.test_DAQ_MCU_is_ready():
+        print("Reset DAQ_MCU")
+        node1.reset_DAQ_MCU()
         time.sleep(2.0)
     node1.flush_rx2_buffer()
-    print(node1.get_AVR_version())
+    daq_mcu = AVR64EA28_DAQ_MCU(node1)
+    print(daq_mcu.get_AVR_version())
     #
     print("Make a recording.")
-    node1.set_AVR_sample_period_us(1000)
-    node1.set_AVR_nsamples(2000)
-    node1.set_AVR_trigger_immediate()
-    node1.set_AVR_analog_channels([('AIN28','GND'),('ain29','gnd')])
-    node1.clear_AVR_PGA()
-    # node1.print_AVR_reg_values()
-    print("AVR ready: ", node1.test_AVR_is_ready())
+    daq_mcu.set_AVR_sample_period_us(1000)
+    daq_mcu.set_AVR_nsamples(2000)
+    daq_mcu.set_AVR_trigger_immediate()
+    daq_mcu.set_AVR_analog_channels([('AIN28','GND'),('ain29','gnd')])
+    daq_mcu.clear_AVR_PGA()
+    # daq_mcu.print_AVR_reg_values()
+    print("AVR ready: ", node1.test_DAQ_MCU_is_ready())
     print("event has passed: ", node1.test_event_has_passed())
-    node1.start_AVR_sampling()
-    ready = node1.test_AVR_is_ready()
+    daq_mcu.start_AVR_sampling()
+    ready = node1.test_DAQ_MCU_is_ready()
     while not ready:
         print('Waiting...')
         time.sleep(0.1)
-        ready = node1.test_AVR_is_ready()
+        ready = node1.test_DAQ_MCU_is_ready()
     print("event has passed: ", node1.test_event_has_passed())
     #
     print("About to fetch data...")
     start = time.time()
-    my_data = node1.fetch_SRAM_data()
+    my_data = daq_mcu.fetch_SRAM_data()
     elapsed = time.time() - start
     print(f"{elapsed:.2f} seconds to fetch SRAM data")
-    my_samples = node1.unpack_to_samples(my_data)
+    my_samples = daq_mcu.unpack_to_samples(my_data)
     #
     print("With the post-trigger samples, make a plot.")
     import matplotlib.pyplot as plt
@@ -50,9 +51,20 @@ def main(sp):
     return
 
 if __name__ == '__main__':
-    sp = openPort('/dev/ttyUSB0')
+    # Typical use on a Linux box:
+    # $ python3 test_4_fetching_data.py -i 2
+    import argparse
+    parser = argparse.ArgumentParser(description="eDAQS node test program")
+    parser.add_argument('-p', '--port', dest='port', help='name for serial port')
+    parser.add_argument('-i', '--identity', dest='identity', help='single-character identity')
+    args = parser.parse_args()
+    port_name = '/dev/ttyUSB0'
+    if args.port: port_name = args.port
+    node_id = '1'
+    if args.identity: node_id = args.identity
+    sp = openPort(port_name)
     if sp:
-        main(sp)
+        main(sp, node_id)
     else:
         print("Did not find the serial port.")
     print("Done.")
