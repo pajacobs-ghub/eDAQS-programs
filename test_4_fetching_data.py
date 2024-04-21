@@ -21,7 +21,7 @@ def main(sp, node_id):
     daq_mcu.set_AVR_trigger_immediate()
     daq_mcu.set_AVR_analog_channels([('AIN28','GND'),('ain29','gnd')])
     daq_mcu.clear_AVR_PGA()
-    # daq_mcu.print_AVR_reg_values()
+    # print(daq_mcu.get_AVR_reg_values_as_text())
     print("AVR ready: ", node1.test_DAQ_MCU_is_ready())
     print("event has passed: ", node1.test_event_has_passed())
     daq_mcu.start_AVR_sampling()

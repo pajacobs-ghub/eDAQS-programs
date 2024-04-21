@@ -23,7 +23,7 @@ def main(sp, node_id):
     print("Look at the current analog voltages.")
     daq_mcu.clear_AVR_PGA()
     daq_mcu.set_AVR_analog_channels([('AIN28','GND'),('ain29','gnd')])
-    daq_mcu.print_AVR_reg_values()
+    print(daq_mcu.get_AVR_reg_values_as_text())
     for i in range(5):
         print('analog values=', daq_mcu.immediate_AVR_sample_set())
         time.sleep(0.5)

@@ -217,9 +217,13 @@ class EDAQSNode(object):
 # DAC_MCU service functions for an AVR64EA28 microcontroller.
 
 class AVR64EA28_DAQ_MCU(object):
-    __slots__ = ['comms_MCU', 'n_reg', 'reg_labels',
-                 'pins', 'channels', 'pga_gains',
-                 'trigger_modes', 'trigger_slopes', 'us_per_tick']
+    __slots__ = ['comms_MCU', 'n_reg', 'reg_labels', 'reg_labels_to_int',
+                 'pins', 'pins_int_to_sym', 'channels',
+                 'ref_voltages', 'ref_voltages_int_to_value',
+                 'pga_gains', 'pga_gains_int_to_value',
+                 'trigger_modes', 'trigger_modes_int_to_sym',
+                 'trigger_slopes', 'trigger_slopes_int_to_sym',
+                 'us_per_tick']
 
     def __init__(self, comms_MCU):
         '''
@@ -239,39 +243,82 @@ class AVR64EA28_DAQ_MCU(object):
             22:'CH6+', 23:'CH6-', 24:'CH7+', 25:'CH7-', 26:'CH8+', 27:'CH8-',
             28:'CH9+', 29:'CH9-', 30:'CH10+', 31:'CH10-', 32:'CH11+', 33:'CH11-'
         }
-        assert self.n_reg == len(self.reg_labels), "Oops, check register labels."
+        assert self.n_reg == len(self.reg_labels), "Oops, check reg_labels."
+        self.reg_labels_to_int = {
+            'PER_TICKS':0, 'NCHANNELS':1, 'NSAMPLES':2,
+            'TRIG_MODE':3, 'TRIG_CHAN':4, 'TRIG_LEVEL':5, 'TRIG_SLOPE':6,
+            'PGA_FLAG':7, 'PGA_GAIN':8, 'V_REF':9,
+            'CH0+':10, 'CH0-':11, 'CH1+':12, 'CH1-':13, 'CH2+':14, 'CH2-':15,
+            'CH3+':16, 'CH3-':17, 'CH4+':18, 'CH4-':19, 'CH5+':20, 'CH5-':21,
+            'CH6+':22, 'CH6-':23, 'CH7+':24, 'CH7-':25, 'CH8+':26, 'CH8-':27,
+            'CH9+':28, 'CH9-':29, 'CH10+':30, 'CH10-':31, 'CH11+':32, 'CH11-':33
+        }
+        assert self.n_reg == len(self.reg_labels_to_int), "Oops, check reg_labels_to_int."
         # Give names to the analog-in pins to make it easy to specify analog inputs.
         self.pins = {
-            'AIN28':28, 'PC0':28, 28:28,
-            'AIN29':29, 'PC1':29, 29:29,
-            'AIN30':30, 'PC2':30, 30:30,
-            'AIN31':31, 'PC3':30, 31:31,
-            'AIN0':0, 'PD0':0, 0:0,
-            'AIN1':1, 'PD1':1, 1:1,
-            'AIN2':2, 'PD2':2, 2:2,
-            'AIN3':3, 'PD3':3, 3:3,
-            'AIN4':4, 'PD4':4, 4:4,
-            'AIN5':5, 'PD5':5, 5:5,
-            'AIN6':6, 'PD6':6, 6:6,
-            'AIN7':7, 'PD2':7, 7:7,
+            'AIN28':28, 'PC0':28, 28:28, 'AIN29':29, 'PC1':29, 29:29,
+            'AIN30':30, 'PC2':30, 30:30, 'AIN31':31, 'PC3':30, 31:31,
+            'AIN0':0, 'PD0':0, 0:0, 'AIN1':1, 'PD1':1, 1:1,
+            'AIN2':2, 'PD2':2, 2:2, 'AIN3':3, 'PD3':3, 3:3,
+            'AIN4':4, 'PD4':4, 4:4, 'AIN5':5, 'PD5':5, 5:5,
+            'AIN6':6, 'PD6':6, 6:6, 'AIN7':7, 'PD2':7, 7:7,
             'GND':48
         }
-        self.channels = []
+        self.pins_int_to_sym = {
+            28:'AIN28', 29:'AIN29',
+            30:'AIN30', 31:'AIN31',
+            0:'AIN0', 1:'AIN1',
+            2:'AIN2', 3:'AIN3',
+            4:'AIN4', 5:'AIN5',
+            6:'AIN6', 7:'AIN7',
+            48:'GND'
+        }
+        self.channels = [] # to be filled in via function calls, later
         self.pga_gains = {
             '1X':0, '1x':0, 1:0,
             '2X':1, '2x':1, 2:1,
             '4X':2, '4x':2, 4:2,
             '8X':3, '8x':3, 8:3,
-            '16X':4, '16x':4, 16:4,
+            '16X':4, '16x':4, 16:4
+        }
+        self.pga_gains_int_to_value = {
+            0:1,
+            1:2,
+            2:4,
+            3:8,
+            4:16
+        }
+        self.ref_voltages = {
+            'VDD':0, 0:0,
+            '1v024':1, '1.024':1, 1:1,
+            '2v048':2, '2.048':2, 2:2,
+            '4v096':3, '4.096':3, 3:3,
+            '2v500':4, '2.500':4, 4:4,
+        }
+        self.ref_voltages_int_to_value = {
+            0:4.75,  # Approximate value of Vsys after Schottyy diode drop.
+            1:1.024,
+            2:2.048,
+            3:4.096,
+            4:2.500
         }
         self.trigger_modes = {
             'IMMEDIATE':0, 0:0,
             'INTERNAL':1, 1:1,
             'EXTERNAL':2, 2:2
         }
+        self.trigger_modes_int_to_sym = {
+            0:'IMMEDIATE',
+            1:'INTERNAL',
+            2:'EXTERNAL'
+        }
         self.trigger_slopes = {
             'NEG':0, 'BELOW':0, 0:0,
             'POS':1, 'ABOVE':1, 1:1
+        }
+        self.trigger_slopes_int_to_sym = {
+            0:'NEG',
+            1:'POS'
         }
         self.us_per_tick = 0.8 # Hardware timer set at this value.
         return
@@ -310,22 +357,31 @@ class AVR64EA28_DAQ_MCU(object):
             self.set_AVR_reg(i, val)
         return
 
-    def print_AVR_reg_values(self):
+    def get_AVR_reg_values_as_text(self):
         '''
+        Returns a text representation of the all of the register values.
         '''
-        print('Reg  Val  Label')
+        txt = 'Reg  Val  Label\n'
         for i in range(self.n_reg):
             val = self.get_AVR_reg(i)
-            print(i, val, self.reg_labels[i])
-        return
+            txt += f'{i} {val} {self.reg_labels[i]}\n'
+        return txt
 
     def set_AVR_sample_period_us(self, dt_us):
         '''
+        Sets the AVR ticks register to (approximately) achieve
+        the sample period in microseconds.
         '''
         ticks = int(dt_us / self.us_per_tick)
         # [TODO] should put some checks on this.
         self.set_AVR_reg(0, ticks)
         return
+
+    def get_AVR_sample_period_us(self):
+        '''
+        Returns sample period in microseconds.
+        '''
+        return self.get_AVR_reg(0) * self.us_per_tick
 
     def set_AVR_analog_channels(self, chan_list):
         '''
@@ -359,6 +415,33 @@ class AVR64EA28_DAQ_MCU(object):
         self.set_AVR_reg(7, 0) # direct
         self.set_AVR_reg(8, 0) # 1X
         return
+
+    def get_AVR_analog_gain(self):
+        '''
+        '''
+        pga_flag = self.get_AVR_reg(7)
+        if pga_flag == 0:
+            return 1
+        elif pga_flag == 1:
+            return self.pga_gains_int_to_value[self.get_AVR_reg(8)]
+
+    def set_AVR_analog_ref_voltage(self, vStr):
+        '''
+        Select the reference voltage from a symbolic name.
+        'VDD', '1v024', '2v048', '4v096', or '2v500'
+        '''
+        refVsel = self.ref_voltages['4v096']
+        try:
+            refVsel = self.ref_voltages[vStr]
+        except:
+            refVsel = self.ref_voltages['4v096']
+        self.set_AVR_reg(9, refVsel)
+        return
+
+    def get_AVR_analog_ref_voltage(self):
+        '''
+        '''
+        return self.ref_voltages_int_to_value[self.get_AVR_reg(9)]
 
     def immediate_AVR_sample_set(self):
         '''
@@ -476,7 +559,7 @@ class AVR64EA28_DAQ_MCU(object):
         txt = self.comms_MCU.command_DAQ_MCU('b')
         bytes_per_sample_set = int(txt)
         for i in range(total_pages):
-            if i > 0 and (i % 100) == 0: print(f"page {i}")
+            if i > 0 and (i % 100) == 0: print(f'page {i}')
             addr = i * 32
             if addr >= total_bytes: addr -= total_bytes
             txt = self.comms_MCU.command_DAQ_MCU(f'M {addr}')
@@ -487,15 +570,23 @@ class AVR64EA28_DAQ_MCU(object):
         nsamples = self.get_AVR_nsamples()
         total_samples = self.get_AVR_max_nsamples()
         mode = self.get_AVR_trigger_mode()
-        return {"total_bytes":total_bytes,
-                "total_pages":total_pages,
-                "bytes_per_sample_set":bytes_per_sample_set,
-                "addr_of_oldest_data":addr_of_oldest_data,
-                "total_samples":total_samples,
-                "nchan":nchan,
-                "nsamples_after_trigger":nsamples,
-                "trigger_mode":mode,
-                "data":_ba}
+        dt_us = self.get_AVR_sample_period_us()
+        late_flag = self.AVR_did_not_keep_up_during_sampling()
+        analog_gain = self.get_AVR_analog_gain()
+        ref_voltage = self.get_AVR_analog_ref_voltage()
+        return {'total_bytes':total_bytes,
+                'total_pages':total_pages,
+                'bytes_per_sample_set':bytes_per_sample_set,
+                'addr_of_oldest_data':addr_of_oldest_data,
+                'total_samples':total_samples,
+                'nchan':nchan,
+                'nsamples_after_trigger':nsamples,
+                'trigger_mode':self.trigger_modes_int_to_sym[mode],
+                'dt_us':dt_us,
+                'late_flag':late_flag,
+                'analog_gain':analog_gain,
+                'ref_voltage':ref_voltage,
+                'data':_ba}
 
     def unpack_to_samples(self, data):
         '''
@@ -509,8 +600,8 @@ class AVR64EA28_DAQ_MCU(object):
         nbytes = data['total_bytes']
         bpss = data['bytes_per_sample_set']
         addr_start = data['addr_of_oldest_data']
-        nchan = data["nchan"]
-        total_samples = data["total_samples"]
+        nchan = data['nchan']
+        total_samples = data['total_samples']
         # Note that the integers are stored in the SRAM chip in big-endian format.
         s = struct.Struct(f'>{nchan}h')
         _samples = [[] for c in range(nchan)]
@@ -520,11 +611,15 @@ class AVR64EA28_DAQ_MCU(object):
             if addr >= nbytes: addr -= nbytes
             items = s.unpack_from(data['data'], offset=addr)
             for j in range(nchan): _samples[j].append(items[j])
-        return {"nchan":nchan,
-                "total_samples":total_samples,
-                "nsamples_after_trigger":data["nsamples_after_trigger"],
-                "trigger_mode":data["trigger_mode"],
-                "data":_samples}
+        return {'nchan':nchan,
+                'total_samples':total_samples,
+                'nsamples_after_trigger':data['nsamples_after_trigger'],
+                'trigger_mode':data['trigger_mode'],
+                'dt_us':data['dt_us'],
+                'late_flag':data['late_flag'],
+                'analog_gain':data['analog_gain'],
+                'ref_voltage':data['ref_voltage'],
+                'data':_samples}
 
 if __name__ == '__main__':
     # A basic test to see if the eDAQS node is attached and awake.

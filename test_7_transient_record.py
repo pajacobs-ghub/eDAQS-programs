@@ -17,6 +17,7 @@ def main(sp, node_id):
     #
     print("Make a recording.")
     daq_mcu.set_AVR_sample_period_us(100)
+    daq_mcu.set_AVR_analog_ref_voltage('4v096')
     daq_mcu.set_AVR_nsamples(20000)
     daq_mcu.set_AVR_trigger_external()
     daq_mcu.set_AVR_analog_channels([('AIN28','GND'),('ain29','gnd')])
@@ -49,6 +50,30 @@ def main(sp, node_id):
     elapsed = time.time() - start
     print(f"{elapsed:.2f} seconds to fetch SRAM data")
     my_samples = daq_mcu.unpack_to_samples(my_data)
+    #
+    print("Save the samples with metadata.")
+    N = my_samples['total_samples']
+    nchan = my_samples['nchan']
+    dt_us = my_samples['dt_us']
+    with open('samples.metadata', 'wt') as f:
+        f.write(f'total_samples: {N}\n')
+        f.write(f'nchan: {nchan}\n')
+        f.write(f'nsamples_after_trigger: {my_samples["nsamples_after_trigger"]}\n')
+        f.write(f'trigger_mode: {my_samples["trigger_mode"]}\n')
+        f.write(f'dt_us: {dt_us}\n')
+        f.write(f'late_flag: {my_samples["late_flag"]}\n')
+        f.write(f'analog_gain: {my_samples["analog_gain"]}\n')
+        f.write(f'ref_voltage: {my_samples["ref_voltage"]}\n')
+    with open('samples.data', 'wt') as f:
+        hdr = f't(ms) chan[0]'
+        for j in range(1,nchan): hdr += f' chan[{j}]'
+        hdr += '\n'
+        f.write(hdr);
+        for i in range(N):
+            f.write('%g %d' % (i*dt_us/1000, my_samples['data'][0][i]))
+            for j in range(1,nchan): f.write(' %d' % my_samples['data'][j][i])
+            f.write('\n')
+
     #
     print("With the full record of samples, make a plot.")
     import matplotlib.pyplot as plt

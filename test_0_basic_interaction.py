@@ -18,7 +18,7 @@ def main(sp, node_id):
     print(daq_mcu.get_AVR_reg(0))
     daq_mcu.set_AVR_regs_to_factory_values()
     daq_mcu.set_AVR_regs_from_dict({1:6, 2:100})
-    daq_mcu.print_AVR_reg_values()
+    print(daq_mcu.get_AVR_reg_values_as_text())
     time.sleep(1.0)
     node1.set_PIC_LED(0)
     for i in range(2):

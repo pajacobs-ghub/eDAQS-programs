@@ -20,7 +20,7 @@ def main(sp, node_id):
     daq_mcu.set_AVR_sample_period_us(1000)
     daq_mcu.set_AVR_nsamples(20)
     daq_mcu.set_AVR_trigger_immediate()
-    daq_mcu.print_AVR_reg_values()
+    print(daq_mcu.get_AVR_reg_values_as_text())
     print("AVR ready: ", node1.test_DAQ_MCU_is_ready())
     print("event has passed: ", node1.test_event_has_passed())
     daq_mcu.start_AVR_sampling()
