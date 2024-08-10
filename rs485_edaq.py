@@ -63,7 +63,7 @@ class EDAQSNode(object):
         For notes, see PJ's workbook page 76, 2024-01-09.
         '''
         self.serial_port.reset_input_buffer()
-        cmd_bytes = f'/{self.id_char}{cmd_txt}!\r'.encode('utf-8')
+        cmd_bytes = f'/{self.id_char}{cmd_txt}!\n'.encode('utf-8')
         # print("cmd_bytes=", cmd_bytes)
         self.serial_port.write(cmd_bytes)
         self.serial_port.flush()
