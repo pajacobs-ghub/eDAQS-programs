@@ -27,7 +27,7 @@ def openPort(port='/dev/ttyUSB0'):
     '''
     ser = None
     try:
-        ser = serial.Serial(port, 115200, rtscts=0, timeout=0.1)
+        ser = serial.Serial(port, 115200, rtscts=0, timeout=0.5)
     except serial.serialutil.SerialException:
         print(f'Did not find serial port: {port}')
         print(f'Serial ports that can be seen: {serial_ports()}')
@@ -76,7 +76,7 @@ class EDAQSNode(object):
 
         For notes, see PJ's workbook page 76, 2024-01-09.
         '''
-        txt = self.serial_port.read_until(expected='\r').strip().decode('utf-8')
+        txt = self.serial_port.readline().strip().decode('utf-8')
         if txt.startswith('/0'):
             if txt.find('#') < 0:
                 print('Incomplete RS485 response:', txt)
