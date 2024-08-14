@@ -17,11 +17,14 @@ def main(sp, node_id):
     daq_mcu = AVR64EA28_DAQ_MCU(node1)
     print(daq_mcu.get_AVR_version())
     #
-    daq_mcu.clear_AVR_PGA()
+    # daq_mcu.clear_AVR_PGA()
+    daq_mcu.set_AVR_PGA('8X')
     daq_mcu.set_AVR_analog_ref_voltage('1v024')
     daq_mcu.set_AVR_analog_channels([('AIN0','AIN1'),
                                      ('AIN2','AIN3'),
                                      ('AIN4','AIN5')])
+    # daq_mcu.set_AVR_burst('NONE')
+    daq_mcu.set_AVR_burst('ACC16')
     daq_mcu.set_AVR_sample_period_us(1000)
     daq_mcu.set_AVR_nsamples(10)
     daq_mcu.set_AVR_trigger_immediate()
@@ -41,6 +44,8 @@ def main(sp, node_id):
     for i in range(nsamples):
         items = daq_mcu.get_AVR_formatted_sample(i)
         print(items)
+    print(30*'-')
+    # print(daq_mcu.get_AVR_reg_values_as_text())
     return
 
 if __name__ == '__main__':

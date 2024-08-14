@@ -5,7 +5,8 @@
 # PJ 2024-03-30: Begin with just getting version strings for both MCUs.
 #    2024-04-01: Fill in more interaction functions, up to sampling.
 #    2024-04-03: Functions to get SRAM data.
-#    2024-04-18: refactor to enable different DAC_MCU flavours
+#    2024-04-18: Refactor to enable different DAC_MCU flavours.
+#    2024-08-14: Add burst-mode sampling.
 #
 import argparse
 import serial
@@ -221,6 +222,7 @@ class AVR64EA28_DAQ_MCU(object):
                  'pins', 'pins_int_to_sym', 'channels',
                  'ref_voltages', 'ref_voltages_int_to_value',
                  'pga_gains', 'pga_gains_int_to_value',
+                 'sample_accumulation_number',
                  'trigger_modes', 'trigger_modes_int_to_sym',
                  'trigger_slopes', 'trigger_slopes_int_to_sym',
                  'us_per_tick']
@@ -233,7 +235,7 @@ class AVR64EA28_DAQ_MCU(object):
         #
         # The following data should match the firmware programmed into the AVR.
         # A dictionary is used so that it is easy to cross-check the labels.
-        self.n_reg = 34
+        self.n_reg = 35
         self.reg_labels = {
             0:'PER_TICKS', 1:'NCHANNELS', 2:'NSAMPLES',
             3:'TRIG_MODE', 4:'TRIG_CHAN', 5:'TRIG_LEVEL', 6:'TRIG_SLOPE',
@@ -241,7 +243,8 @@ class AVR64EA28_DAQ_MCU(object):
             10:'CH0+', 11:'CH0-', 12:'CH1+', 13:'CH1-', 14:'CH2+', 15:'CH2-',
             16:'CH3+', 17:'CH3-', 18:'CH4+', 19:'CH4-', 20:'CH5+', 21:'CH5-',
             22:'CH6+', 23:'CH6-', 24:'CH7+', 25:'CH7-', 26:'CH8+', 27:'CH8-',
-            28:'CH9+', 29:'CH9-', 30:'CH10+', 31:'CH10-', 32:'CH11+', 33:'CH11-'
+            28:'CH9+', 29:'CH9-', 30:'CH10+', 31:'CH10-', 32:'CH11+', 33:'CH11-',
+            34:'NBURST'
         }
         assert self.n_reg == len(self.reg_labels), "Oops, check reg_labels."
         self.reg_labels_to_int = {
@@ -251,7 +254,8 @@ class AVR64EA28_DAQ_MCU(object):
             'CH0+':10, 'CH0-':11, 'CH1+':12, 'CH1-':13, 'CH2+':14, 'CH2-':15,
             'CH3+':16, 'CH3-':17, 'CH4+':18, 'CH4-':19, 'CH5+':20, 'CH5-':21,
             'CH6+':22, 'CH6-':23, 'CH7+':24, 'CH7-':25, 'CH8+':26, 'CH8-':27,
-            'CH9+':28, 'CH9-':29, 'CH10+':30, 'CH10-':31, 'CH11+':32, 'CH11-':33
+            'CH9+':28, 'CH9-':29, 'CH10+':30, 'CH10-':31, 'CH11+':32, 'CH11-':33,
+            'NBURST':34
         }
         assert self.n_reg == len(self.reg_labels_to_int), "Oops, check reg_labels_to_int."
         # Give names to the analog-in pins to make it easy to specify analog inputs.
@@ -287,6 +291,22 @@ class AVR64EA28_DAQ_MCU(object):
             2:4,
             3:8,
             4:16
+        }
+        self.sample_accumulation_number = {
+            # Actual samples per conversion is 2^^(this number).
+            # Only a limited number of options are available,
+            # as given in Table 31.5.10 of the data sheet.
+            'NONE':0, 'none':0, 0:0,
+            'ACC2':1, 'acc2':1, 2:1,
+            'ACC4':2, 'acc4':2, 4:2,
+            'ACC8':3, 'acc8':3, 8:3,
+            'ACC16':4, 'acc16':4, 16:4,
+            'ACC32':5, 'acc32':5, 32:5,
+            'ACC64':6, 'acc64':6, 64:6,
+            'ACC128':7, 'acc128':7, 128:7,
+            'ACC256':8, 'acc256':8, 256:8,
+            'ACC512':9, 'acc512':9, 512:9,
+            'ACC1024':10, 'acc1024': 10, 1024:10
         }
         self.ref_voltages = {
             'VDD':0, 0:0,
@@ -436,6 +456,26 @@ class AVR64EA28_DAQ_MCU(object):
         except:
             refVsel = self.ref_voltages['4v096']
         self.set_AVR_reg(9, refVsel)
+        return
+
+    def get_AVR_burst_samples(self):
+        return 2**self.get_AVR_reg(34)
+
+    def set_AVR_burst(self, n):
+        '''
+        The number of samples per conversion is 2**n.
+
+        Note that when setting this number nonzero,
+        we will get conversion results that are 16 times
+        the nominal 12-bit value because we have elected
+        to use burst-mode with result scaling.
+        '''
+        log2n = 0
+        try:
+            log2n = self.sample_accumulation_number[n]
+        except:
+            log2n = 0
+        self.set_AVR_reg(34, log2n)
         return
 
     def get_AVR_analog_ref_voltage(self):
