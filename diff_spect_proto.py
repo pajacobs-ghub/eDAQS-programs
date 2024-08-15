@@ -30,31 +30,6 @@ def main(sp, node_id, fileName):
                                      ('AIN4','AIN5')])
     # daq_mcu.set_AVR_burst('NONE')
     daq_mcu.set_AVR_burst('ACC16')
-    if False:
-        # Thise little recording process is a left-over
-        # from the initial build of this script
-        # Discard when appropriate.
-        daq_mcu.set_AVR_sample_period_us(1000)
-        daq_mcu.set_AVR_nsamples(10)
-        daq_mcu.set_AVR_trigger_immediate()
-        # print(daq_mcu.get_AVR_reg_values_as_text())
-        print("AVR ready: ", node1.test_DAQ_MCU_is_ready())
-        print("event has passed: ", node1.test_event_has_passed())
-        daq_mcu.start_AVR_sampling()
-        ready = node1.test_DAQ_MCU_is_ready()
-        while not ready:
-            print('Waiting...')
-            time.sleep(0.01)
-            ready = node1.test_DAQ_MCU_is_ready()
-        # After sampling is done.
-        print("event has passed: ", node1.test_event_has_passed())
-        nchan = daq_mcu.get_AVR_nchannels()
-        nsamples = daq_mcu.get_AVR_nsamples()
-        for i in range(nsamples):
-            items = daq_mcu.get_AVR_formatted_sample(i)
-            print(items)
-        print(30*'-')
-        # print(daq_mcu.get_AVR_reg_values_as_text())
     # Start asking for data and recording it to a file.
     f = open(fileName, 'w')
     try:
