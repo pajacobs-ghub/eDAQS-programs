@@ -9,10 +9,10 @@ The AVR-eDAQ-1 is an embeddable data acquisition board
 based on an AVR64EA28 microcontroller for sampling up to 12 analog signals
 together with a PIC18F16Q41 microcontroller that handles serial communication 
 with a supervising personal computer.
-The analog signals (nominally 0-5V) are provided to the header 
-at the left side of the photograph (below)
-and the RS485 connection, together with power-input pins, 
-is attached to the header at the top right of the photograph.
+The analog signals (nominally 0-5V) are provided to the J1 or J2 pin headers 
+at the left side of the photograph (below).
+The RS485 connection, together with power-input pins, 
+is attached to the J5 pin header at the top right of the photograph.
 The board is intended to be operated via text commands 
 from the personal computer, with the board responding only to commands
 that have been addressed to it.
@@ -28,7 +28,8 @@ This arrangement enables the DAQ-MCU to be fully committed to regular
 sampling of the analog signals while the COMMS-MCU remains responsive
 to the supervisory computer's commands. 
 
-To the left, the analog input signals are labelled AIN28 .. AIN7 
+To the left, the analog input signals at pin headers J1 and J2 
+are labelled AIN28 .. AIN7 
 so that they correspond to the names of the AVR64EA28 pins.
 Up to 12 single-ended signals can be attached, or 6 differential signals,
 or any intermediate combination that you might like to specify.
@@ -44,10 +45,25 @@ arriving at the eDAQ board.
 
 While DAQ-MCU is sampling, the sampled data are stored locally 
 on the SRAM chip, which is used as a circular buffer.
-With sampling for an indefinite time, the oldest data in the chip 
+When sampling for an indefinite time, the oldest data in the chip 
 are overwritten with the most recent data.
+The trigger for a recording event may be sourced from one of the 
+analog input signals passing a threshold level, 
+by an external trigger signal passing a threshold level,
+or by another board pulling the Event# signal low. 
 
 ![Schematic diagram for the AVR-eDAQ-1 board](./figures/edaq-node-1-avr-pic-system.png)
+
+Pin header J5, at the top right of the board, is used to provide 5V power 
+and access to the RS485 bus.  It also provides access to the common Event# signal
+so that the recording on several node boards can be synchronized.
+The pins are:
+
+1. 5V
+2. GND
+3. RS485 A
+4. RS485 B
+5. Event#
 
 The COMMS-MCU accepts commands from the RS485 port and always responds.
 Some commands may be passed to the DAQ-MCU for configuration, 
@@ -77,8 +93,34 @@ The nominal input range is 0-5V but the diode between the 1k input resistor
 and the 5V power rail (and soldered diagonally in the photograph)
 provides some overvoltage protection.
 
-Serial communications via the half-duplex RS485 port 
-operates at 115200 baud 8-bit, no parity and 1 stop bit.
+The COMMS-MCU is connected to the connected to the RS485 bus via a MAX3082
+half-duplex level shifter.
+This allows several boards to be attached concurrently to the supervisory PC
+and should allow reliable communication over reasonably long wires.
+The serial settings are speed of 115200 baud, 8-bit data, no parity and 1 stop bit.
+The supervisory computer acts as the master and each node board responds
+only when a command message is directed to it.
+
+If you wish to use just a single board and not communicate with it via
+the RS485 bus, you can remove the COMMS-MCU and MAX3082 buffer chip,
+and connect the DAQ-MCU to a supervisory PC via an FTDI TTL-232-5V cable
+attached to pin header J3.
+The AVR serial port is expecting settings of 230400 baud, 
+8N1 and no flow control.
+The AVR firmware also expects a `\r` (carriage-return) character to mark
+the end of line at input.
+This is different to the COMMS-MCU expectations on the RS485 serial bus,
+as described above.
+
+
+## Firmware
+
+The source code for the firmware running on the DAQ-MCU in written in C and
+can be found at [https://github.com/pajacobs-ghub/AVR64EA28-DAQ-MCU-firmware](https://github.com/pajacobs-ghub/AVR64EA28-DAQ-MCU-firmware)
+The on-board firmware may be updated via the UPDI header J6.
+
+The code for the COMMS-MCU at [https://github.com/pajacobs-ghub/pic18f16q41-COMMS-MCU-firmware](https://github.com/pajacobs-ghub/pic18f16q41-COMMS-MCU-firmware)
+The on-board firmware may be updated via the ICSP header J7.
 
 
 ## RS485 messages
@@ -105,7 +147,13 @@ It will respond only if it receives a complete message with correct id.
 The supervising PC uses `0` as its id.
 Note that this is the ASCII character, not the numerical value (NULL character).
 
-When using a terminal to send messages to a node, 
+It is expected that most applications will be written as Python scripts 
+that call the high-level functions in this repository and the user will
+not need to write and read the RS485 messages directly.
+However, for debugging and learning about the system, 
+it may be useful to be able to formulate and send messages
+to a node via a serial terminal.
+When using a serial terminal to send messages to a node, 
 use the key-combination `Control-J` rather then the `Enter` key 
 to send that new-line character. 
 
@@ -176,7 +224,3 @@ It wraps the layers
 - COMMS-MCU commands and higher-level functions
 - DAQ-MCU commands and higher-level functions
 
-Applications can be written as Python scripts that call the high-level functions
-without the need to directly write and read the RS485 messages.
-For debugging, it may be useful to be able to formulate and send messages
-to a node via a serial terminal.
