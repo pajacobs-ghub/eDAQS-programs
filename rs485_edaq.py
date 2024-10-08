@@ -511,7 +511,7 @@ class AVR64EA28_DAQ_MCU(object):
         # [TODO] some checking for reasonable input.
         self.set_AVR_reg(3, self.trigger_modes['INTERNAL'])
         self.set_AVR_reg(4, chan)
-        self.set_AVR-reg(5, level)
+        self.set_AVR_reg(5, level)
         self.set_AVR_reg(6, self.trigger_slopes[slope])
         return
 
@@ -531,6 +531,10 @@ class AVR64EA28_DAQ_MCU(object):
         Set the number of samples to be recorded after trigger event.
         '''
         # [TODO] some checking for reasonable input.
+        if n < 0: n = 100 # Somewhat arbitrary.
+        # The AVR firmware is reports value as a 16-bit signed integer,
+        # so let's avoid setting values too large.
+        if n > 32767: n = 32767
         self.set_AVR_reg(2, n)
         return
 
@@ -560,6 +564,7 @@ class AVR64EA28_DAQ_MCU(object):
         return int(self.comms_MCU.command_DAQ_MCU('T'))
 
     def get_AVR_nsamples(self):
+        # The number of samples should be treated as an unsigned integer.
         return self.get_AVR_reg(2)
 
     def get_AVR_trigger_mode(self):
@@ -663,7 +668,7 @@ class AVR64EA28_DAQ_MCU(object):
 
 if __name__ == '__main__':
     # A basic test to see if the eDAQS node is attached and awake.
-    # Typical use on a Linux box:
+    # Assuming that you have node '2', typical use on a Linux box:
     # $ python3 rs485_edaq.py -i 2
     import argparse
     parser = argparse.ArgumentParser(description="eDAQS node test program")
