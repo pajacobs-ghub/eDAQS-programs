@@ -27,7 +27,7 @@ def main(sp, node_id):
     print("Make a recording.")
     daq_mcu.set_AVR_sample_period_us(50)
     daq_mcu.set_AVR_analog_ref_voltage('4v096')
-    daq_mcu.set_AVR_nsamples(32768)
+    daq_mcu.set_AVR_nsamples(16384)
     daq_mcu.set_AVR_trigger_internal(0, 1000, 1)
     daq_mcu.set_AVR_analog_channels([('AIN28','GND'),('ain29','gnd')])
     daq_mcu.clear_AVR_PGA()

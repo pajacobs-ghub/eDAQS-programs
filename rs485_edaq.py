@@ -604,9 +604,9 @@ class AVR64EA28_DAQ_MCU(object):
         txt = self.comms_MCU.command_DAQ_MCU('b')
         bytes_per_sample_set = int(txt)
         for i in range(total_pages):
-            if i > 0 and (i % 100) == 0: print(f'page {i}')
             addr = i * 32
             if addr >= total_bytes: addr -= total_bytes
+            if i > 0 and (i % 100) == 0: print(f'page {i} byte-address {addr}')
             txt = self.comms_MCU.command_DAQ_MCU(f'M {addr}')
             b = bytearray.fromhex(txt)
             for j in range(32): _ba[addr+j] = b[j]
@@ -619,6 +619,11 @@ class AVR64EA28_DAQ_MCU(object):
         late_flag = self.AVR_did_not_keep_up_during_sampling()
         analog_gain = self.get_AVR_analog_gain()
         ref_voltage = self.get_AVR_analog_ref_voltage()
+        print(f'total_bytes={total_bytes}')
+        print(f'total_pages={total_pages}')
+        print(f'bytes_per_sample_set={bytes_per_sample_set}')
+        print(f'byte-addr_of_oldest_data={addr_of_oldest_data}')
+        print(f'total_samples={total_samples}')
         return {'total_bytes':total_bytes,
                 'total_pages':total_pages,
                 'bytes_per_sample_set':bytes_per_sample_set,
