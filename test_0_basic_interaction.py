@@ -13,6 +13,7 @@ def main(sp, node_id):
     node1.flush_rx2_buffer()
     daq_mcu = AVR64EA28_DAQ_MCU(node1)
     print(daq_mcu.get_AVR_version())
+    print("size of SRAM (bytes)=", daq_mcu.get_AVR_size_of_SRAM_in_bytes())
     print(daq_mcu.get_AVR_reg(0))
     print(daq_mcu.set_AVR_reg(0, 250))
     print(daq_mcu.get_AVR_reg(0))
