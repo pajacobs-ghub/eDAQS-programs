@@ -235,7 +235,7 @@ class AVR64EA28_DAQ_MCU(object):
         #
         # The following data should match the firmware programmed into the AVR.
         # A dictionary is used so that it is easy to cross-check the labels.
-        self.n_reg = 35
+        self.n_reg = 36
         self.reg_labels = {
             0:'PER_TICKS', 1:'NCHANNELS', 2:'NSAMPLES',
             3:'TRIG_MODE', 4:'TRIG_CHAN', 5:'TRIG_LEVEL', 6:'TRIG_SLOPE',
@@ -244,7 +244,7 @@ class AVR64EA28_DAQ_MCU(object):
             16:'CH3+', 17:'CH3-', 18:'CH4+', 19:'CH4-', 20:'CH5+', 21:'CH5-',
             22:'CH6+', 23:'CH6-', 24:'CH7+', 25:'CH7-', 26:'CH8+', 27:'CH8-',
             28:'CH9+', 29:'CH9-', 30:'CH10+', 31:'CH10-', 32:'CH11+', 33:'CH11-',
-            34:'NBURST'
+            34:'NBURST', 35: 'DIFF_CONV'
         }
         assert self.n_reg == len(self.reg_labels), "Oops, check reg_labels."
         self.reg_labels_to_int = {
@@ -255,7 +255,7 @@ class AVR64EA28_DAQ_MCU(object):
             'CH3+':16, 'CH3-':17, 'CH4+':18, 'CH4-':19, 'CH5+':20, 'CH5-':21,
             'CH6+':22, 'CH6-':23, 'CH7+':24, 'CH7-':25, 'CH8+':26, 'CH8-':27,
             'CH9+':28, 'CH9-':29, 'CH10+':30, 'CH10-':31, 'CH11+':32, 'CH11-':33,
-            'NBURST':34
+            'NBURST':34, 'DIFF_CONV':35
         }
         assert self.n_reg == len(self.reg_labels_to_int), "Oops, check reg_labels_to_int."
         # Give names to the analog-in pins to make it easy to specify analog inputs.
@@ -483,6 +483,18 @@ class AVR64EA28_DAQ_MCU(object):
         '''
         return self.ref_voltages_int_to_value[self.get_AVR_reg(9)]
 
+    def set_AVR_differential_conversion(self):
+        '''
+        '''
+        self.set_AVR_reg(35, 1)
+        return
+
+    def set_AVR_single_sided_conversion(self):
+        '''
+        '''
+        self.set_AVR_reg(35, 0)
+        return
+
     def immediate_AVR_sample_set(self):
         '''
         '''
@@ -591,8 +603,8 @@ class AVR64EA28_DAQ_MCU(object):
 
     def fetch_SRAM_data(self):
         '''
-        Returns a bytearray containing the SRAM data, along with
-        enough metadata to interpret the bytes as samples.
+        Returns a bytearray containing the full SRAM data,
+        along with enough metadata to interpret the bytes as samples.
         '''
         txt = self.comms_MCU.command_DAQ_MCU('a')
         addr_of_oldest_data = int(txt)

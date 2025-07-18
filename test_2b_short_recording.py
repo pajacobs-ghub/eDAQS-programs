@@ -1,5 +1,5 @@
-# test_2_short_recording.py
-# Keep the differential-conversion option.
+# test_2b_short_recording.py
+# Try the single-sided conversion option.
 
 from rs485_edaq import *
 
@@ -17,7 +17,7 @@ def main(sp, node_id):
     print(daq_mcu.get_AVR_version())
     #
     daq_mcu.clear_AVR_PGA()
-    daq_mcu.set_AVR_differential_conversion()
+    daq_mcu.set_AVR_single_sided_conversion()
     daq_mcu.set_AVR_analog_channels([('AIN28','GND'),('ain29','gnd')])
     daq_mcu.set_AVR_sample_period_us(1000)
     daq_mcu.set_AVR_nsamples(20)
