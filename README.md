@@ -299,6 +299,7 @@ These are an array of 16-bit numbers that may be set or read via command.
 | 32    | 7       | Pin selection for CH11+. (AIN7) |
 | 33    | 48      | Pin selection for CH11-. (GND)  |
 | 34    | 0       | Number of samples to be taken in burst-sampling mode. (NBURST) |
+| 35    | 1       | Differential conversion bit. Set to 0 for single-sided conversion.|
 
 
 Note that, by default, the first 6 channels are configured for differential input

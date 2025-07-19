@@ -346,10 +346,21 @@ class AVR64EA28_DAQ_MCU(object):
     def get_AVR_version(self):
         return self.comms_MCU.command_DAQ_MCU('v')
 
+    def get_AVR_n_reg_actual(self):
+        '''
+        Get the actual number of virtual registers in the AVR MCU.
+        This may be differ with firmware version.
+        '''
+        txt = self.comms_MCU.command_DAQ_MCU('n')
+        return int(txt)
+
     def get_AVR_reg(self, i):
         '''
         Returns the value of the i-th pseudo-register.
         '''
+        n_reg_actual = self.get_AVR_n_reg_actual()
+        if i >= n_reg_actual:
+            raise RuntimeError(f'Requested register {i} but n_reg_actual is {n_reg_actual}.')
         txt = self.comms_MCU.command_DAQ_MCU(f'r {i}')
         return int(txt)
 
@@ -358,6 +369,9 @@ class AVR64EA28_DAQ_MCU(object):
         Sets the value of the i-th pseudo-register and
         returns the value reported.
         '''
+        n_reg_actual = self.get_AVR_n_reg_actual()
+        if i >= n_reg_actual:
+            raise RuntimeError(f'Setting register {i} but n_reg_actual is {n_reg_actual}.')
         txt = self.comms_MCU.command_DAQ_MCU(f's {i} {val}')
         return int(txt.split()[1])
 
@@ -371,8 +385,11 @@ class AVR64EA28_DAQ_MCU(object):
 
         This should be convenient form for defining configurations.
         '''
+        n_reg_actual = self.get_AVR_n_reg_actual()
         for i in d.keys():
             val = d[i]
+            if i >= n_reg_actual:
+                raise RuntimeError(f'Setting register {i} but n_reg_actual is {n_reg_actual}.')
             print(f'Setting reg[{i}]={val} ({self.reg_labels[i]})')
             self.set_AVR_reg(i, val)
         return
@@ -381,8 +398,9 @@ class AVR64EA28_DAQ_MCU(object):
         '''
         Returns a text representation of the all of the register values.
         '''
+        n_reg_actual = self.get_AVR_n_reg_actual()
         txt = 'Reg  Val  Label\n'
-        for i in range(self.n_reg):
+        for i in range(n_reg_actual):
             val = self.get_AVR_reg(i)
             txt += f'{i} {val} {self.reg_labels[i]}\n'
         return txt
