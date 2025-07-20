@@ -579,89 +579,202 @@ class AVR64EA28_DAQ_MCU(object):
         return
 
     def AVR_did_not_keep_up_during_sampling(self):
+        '''
+        Returns a boolean flag indicating whether the requested sample period
+        was always maintained.
+
+        It takes only one late arrival at the end of the sampling loop to
+        indicate that the AVR did not kep up during sampling.
+        '''
         return (int(self.comms_MCU.command_DAQ_MCU('k')) == 1)
 
     def get_AVR_nchannels(self):
+        '''
+        Returns the number of channels that were recorded per sample set.
+        '''
         return self.get_AVR_reg(1)
 
     def get_AVR_byte_size_of_sample_set(self):
+        '''
+        Returns the number of bytes used to store one sample set.
+
+        Depends upon the number of channels being recorded.
+        '''
         return int(self.comms_MCU.command_DAQ_MCU('b'))
 
     def get_AVR_max_nsamples(self):
+        '''
+        Returns the number of sample sets that can be stored in SRAM.
+
+        This value is dependent on the total amount of SRAM installed
+        and the number of channels being recorded.
+        '''
         return int(self.comms_MCU.command_DAQ_MCU('m'))
 
     def get_AVR_size_of_SRAM_in_bytes(self):
         return int(self.comms_MCU.command_DAQ_MCU('T'))
 
+    def get_AVR_byte_address_of_oldest_data(self):
+        '''
+        Returns the byte-address.
+
+        Since the SRAM memory is treated as a circular buffer,
+        this address may be almost anywhere in the available range.
+        The possible sizes of each sample set is restricted
+        so that sample sets fit neatly into the available SRAM space.
+        A sample set will not be split over the end/beginning of
+        the address-space.
+        '''
+        return int(self.comms_MCU.command_DAQ_MCU('a'))
+
+    def get_AVR_size_of_SRAM_in_pages(self):
+        '''
+        Returns the number of 32-byte pages in the SRAM storage.
+        '''
+        return int(self.comms_MCU.command_DAQ_MCU('N'))
+
+    def get_AVR_page_of_bytes(self, addr):
+        '''
+        Returns a 32-byte array, starting at byte-address addr.
+        '''
+        txt = self.comms_MCU.command_DAQ_MCU(f'M {addr}')
+        return bytearray.fromhex(txt)
+
     def get_AVR_nsamples(self):
-        # The number of samples should be treated as an unsigned integer.
+        '''
+        Returns the number of samples after the trigger event.
+
+        Note that this number should be treated as an unsigned integer.
+        '''
         return self.get_AVR_reg(2)
 
     def get_AVR_trigger_mode(self):
+        '''
+        Returns the integer value representing the trigger mode.
+        '''
         return self.get_AVR_reg(3)
 
     def get_AVR_formatted_sample(self, i):
+        '''
+        Returns the values of the recorded sample set i,
+        where i is counted from the oldest recorded sample (i=0).
+
+        The AVR reports these values as a string of space-separated integers.
+        '''
         return [int(item) for item in self.comms_MCU.command_DAQ_MCU(f'P {i}').split()]
+
+    #------------------------
+    # Higher-level functions.
+    #------------------------
 
     def get_recorded_data(self):
         '''
         Returns a list of lists containing the recorded values for each channel.
+
+        This is a fairly slow way to get the full set of recorded samples
+        because the AVR is doing all of the house-keeping and returning the
+        sampled values as text strings.
+        It may be faster to fetch the SRAM data in and then unpack the
+        sample values on the PC.
         '''
         nchan = self.get_AVR_nchannels()
         _data = [[] for c in range(nchan)]
         #
-        nsamples = self.get_AVR_nsamples()
+        nsamples_after_trigger = self.get_AVR_nsamples()
         max_samples = self.get_AVR_max_nsamples()
         mode = self.get_AVR_trigger_mode()
-        N = nsamples if mode==0 else max_samples
+        N = nsamples_after_trigger if mode==0 else max_samples
         for i in range(N):
             sample_values = self.get_AVR_formatted_sample(i)
             for j in range(nchan): _data[j].append(sample_values[j])
         return _data
 
-    def fetch_SRAM_data(self):
+    def fetch_SRAM_data(self, n_select=None, n_pretrigger=None):
         '''
-        Returns a bytearray containing the full SRAM data,
+        Returns a bytearray containing a selection of the SRAM data,
         along with enough metadata to interpret the bytes as samples.
+
+        The selection is specified by:
+        n_select     : the number of sample sets in the selection
+        n_pretrigger : the number of sample sets before the trigger
+        The default values of None indicate that we want as many as possible.
+
+        Note that the bytearray will end up with the same data layout as the SRAM.
         '''
-        txt = self.comms_MCU.command_DAQ_MCU('a')
-        addr_of_oldest_data = int(txt)
-        txt = self.comms_MCU.command_DAQ_MCU('T')
-        total_bytes = int(txt)
+        DEBUG = True
+        byte_addr_of_oldest_data = self.get_AVR_byte_address_of_oldest_data()
+        total_bytes = self.get_AVR_size_of_SRAM_in_bytes()
         _ba = bytearray(total_bytes)
-        txt = self.comms_MCU.command_DAQ_MCU('N')
-        total_pages = int(txt)
-        txt = self.comms_MCU.command_DAQ_MCU('b')
-        bytes_per_sample_set = int(txt)
-        for i in range(total_pages):
-            addr = i * 32
+        total_pages = self.get_AVR_size_of_SRAM_in_pages()
+        bytes_per_sample_set = self.get_AVR_byte_size_of_sample_set()
+        nchan = self.get_AVR_nchannels()
+        nsamples_after_trigger = self.get_AVR_nsamples()
+        total_samples = self.get_AVR_max_nsamples()
+        nsamples_before_trigger = total_samples - nsamples_after_trigger
+        # The oldest sample set in SRAM has index 0.
+        trigger_sample_index = nsamples_before_trigger
+        if DEBUG:
+            print(f'total_bytes={total_bytes}')
+            print(f'total_pages={total_pages}')
+            print(f'bytes_per_sample_set={bytes_per_sample_set}')
+            print(f'byte_addr_of_oldest_data={byte_addr_of_oldest_data}')
+            print(f'total_samples={total_samples}')
+            print(f'nsamples_after_trigger={nsamples_after_trigger}')
+            print(f'nsamples_before_trigger={nsamples_before_trigger}')
+            print(f'trigger_sample_index={trigger_sample_index}')
+        #
+        # Work out the selection in terms of sample number,
+        # and then again in page number (for the actual fetch).
+        if n_select is None: n_select = total_samples
+        n_select = min(n_select, total_samples)
+        if n_pretrigger is None: n_pretrigger = nsamples_before_trigger
+        n_pretrigger = min(n_pretrigger, nsamples_before_trigger)
+        #
+        # Depending on the number of channels, there can be a few sample sets
+        # on each 32-byte page in SRAM.
+        samples_per_page = 32 // bytes_per_sample_set
+        first_sample_index = trigger_sample_index - n_pretrigger
+        first_sample_byte_addr = byte_addr_of_oldest_data + bytes_per_sample_set * first_sample_index
+        if first_sample_byte_addr > total_bytes: first_sample_byte_addr -= total_bytes
+        first_page_index = first_sample_byte_addr // 32
+        n_pages_to_get = n_select // samples_per_page
+        # If the samples start part way through a page, we fetch an extra page to get the last few.
+        if (first_sample_byte_addr % 32) != 0: n_pages_to_get += 1
+        n_pages_to_get = min(n_pages_to_get, total_pages)
+        if DEBUG:
+            print(f'n_select={n_select}')
+            print(f'n_pretrigger={n_pretrigger}')
+            print(f'first_sample_index={first_sample_index}')
+            print(f'samples_per_page={samples_per_page}')
+            print(f'first_sample_byte_addr={first_sample_byte_addr}')
+        print(f'About to fetch {n_pages_to_get} pages, starting at page {first_page_index}.')
+        #
+        # Fetch only the requested pages.
+        for i in range(n_pages_to_get):
+            addr = (i+first_page_index) * 32
             if addr >= total_bytes: addr -= total_bytes
             if i > 0 and (i % 100) == 0: print(f'page {i} byte-address {addr}')
-            txt = self.comms_MCU.command_DAQ_MCU(f'M {addr}')
-            b = bytearray.fromhex(txt)
-            for j in range(32): _ba[addr+j] = b[j]
+            bpage = self.get_AVR_page_of_bytes(addr)
+            for j in range(32): _ba[addr+j] = bpage[j]
+        #
         # Other metadata to include with the bytearray.
-        nchan = self.get_AVR_nchannels()
-        nsamples = self.get_AVR_nsamples()
-        total_samples = self.get_AVR_max_nsamples()
         mode = self.get_AVR_trigger_mode()
         dt_us = self.get_AVR_sample_period_us()
         late_flag = self.AVR_did_not_keep_up_during_sampling()
         analog_gain = self.get_AVR_analog_gain()
         ref_voltage = self.get_AVR_analog_ref_voltage()
-        print(f'total_bytes={total_bytes}')
-        print(f'total_pages={total_pages}')
-        print(f'bytes_per_sample_set={bytes_per_sample_set}')
-        print(f'byte-addr_of_oldest_data={addr_of_oldest_data}')
-        print(f'total_samples={total_samples}')
         return {'total_bytes':total_bytes,
                 'total_pages':total_pages,
                 'bytes_per_sample_set':bytes_per_sample_set,
-                'addr_of_oldest_data':addr_of_oldest_data,
+                'byte_addr_of_oldest_data':byte_addr_of_oldest_data,
                 'total_samples':total_samples,
-                'nchan':nchan,
-                'nsamples_after_trigger':nsamples,
+                'nsamples_after_trigger': nsamples_after_trigger,
+                'nsamples_before_trigger': nsamples_before_trigger,
+                'nsamples_select': n_select,
+                'nsamples_select_pretrigger': n_pretrigger,
+                'first_sample_index': first_sample_index,
                 'trigger_mode':self.trigger_modes_int_to_sym[mode],
+                'nchan':nchan,
                 'dt_us':dt_us,
                 'late_flag':late_flag,
                 'analog_gain':analog_gain,
@@ -671,29 +784,30 @@ class AVR64EA28_DAQ_MCU(object):
     def unpack_to_samples(self, data):
         '''
         Given the dictionary containing the SRAM bytes and metadata,
-        unpack those bytes into the channels of samples.
+        unpack those bytes into the channels of selected samples.
 
         The data is unwrapped such that the oldest sample is at index 0.
         Depending on the trigger mode, the index at the trigger event
-        may be nonzero.
+        may be nonzero and is given by nsamples_select_pretrigger.
         '''
-        nbytes = data['total_bytes']
-        bpss = data['bytes_per_sample_set']
-        addr_start = data['addr_of_oldest_data']
         nchan = data['nchan']
-        total_samples = data['total_samples']
+        bpss = data['bytes_per_sample_set']
+        nbytes = data['total_bytes']
+        byte_addr_of_oldest_data = data['byte_addr_of_oldest_data']
+        nsamples_select = data['nsamples_select']
+        first_sample_index = data['first_sample_index']
         # Note that the integers are stored in the SRAM chip in big-endian format.
         s = struct.Struct(f'>{nchan}h')
         _samples = [[] for c in range(nchan)]
-        for i in range(total_samples):
+        for i in range(nsamples_select):
             # Unwrap the stored data so that the oldest data is at sample[0].
-            addr = addr_start + bpss * i
+            addr = byte_addr_of_oldest_data + bpss * (i + first_sample_index)
             if addr >= nbytes: addr -= nbytes
             items = s.unpack_from(data['data'], offset=addr)
             for j in range(nchan): _samples[j].append(items[j])
         return {'nchan':nchan,
-                'total_samples':total_samples,
-                'nsamples_after_trigger':data['nsamples_after_trigger'],
+                'nsamples_select':nsamples_select,
+                'nsamples_select_pretrigger':data['nsamples_select_pretrigger'],
                 'trigger_mode':data['trigger_mode'],
                 'dt_us':data['dt_us'],
                 'late_flag':data['late_flag'],

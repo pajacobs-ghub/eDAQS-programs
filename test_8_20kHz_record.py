@@ -1,10 +1,15 @@
 # test_8_20kHz_record.py
 # Example for collecting two channels of data for the repetitive shock tube.
 # PJ 2024-10-08
+#    2025-07-20 : Selectively fetch the recorded data.
 #
 # The physical input for my test was a signal generator running continuously.
-#   AIN28 - 0-4V sine wave at 10Hz
+# 2024-10-08
+#   AIN28 - 0-4V sine wave at 10Hz from Rigol signal gen.
 #   AIN29 - 0-2V square wave at 10Hz and synchronised with the sine wave.
+# 2025-07-20: feed via voltage divider (signal gen was 0-4V)
+#   AIN28 - 0-2V sine wave at 10Hz
+#   AIN29 - 0-2V sine wave at 10Hz
 #
 # It is expected that, with a cyclic and continuous input,
 # the trigger will happen immediately.
@@ -28,7 +33,8 @@ def main(sp, node_id):
     daq_mcu.set_AVR_sample_period_us(50)
     daq_mcu.set_AVR_analog_ref_voltage('4v096')
     daq_mcu.set_AVR_nsamples(16384)
-    daq_mcu.set_AVR_trigger_internal(0, 1000, 1)
+    daq_mcu.set_AVR_trigger_internal(0, 500, 1)
+    daq_mcu.set_AVR_single_sided_conversion()
     daq_mcu.set_AVR_analog_channels([('AIN28','GND'),('ain29','gnd')])
     daq_mcu.clear_AVR_PGA()
     daq_mcu.set_AVR_burst(0)
@@ -54,7 +60,8 @@ def main(sp, node_id):
     print(f"AVR late sampling={daq_mcu.AVR_did_not_keep_up_during_sampling()}")
     print("About to fetch data...")
     start = time.time()
-    my_data = daq_mcu.fetch_SRAM_data()
+    # my_data = daq_mcu.fetch_SRAM_data()
+    my_data = daq_mcu.fetch_SRAM_data(n_select=2000, n_pretrigger=200)
     elapsed = time.time() - start
     print(f"{elapsed:.2f} seconds to fetch SRAM data")
     #
@@ -64,13 +71,13 @@ def main(sp, node_id):
     #
     my_samples = daq_mcu.unpack_to_samples(my_data)
     print("Save the samples with metadata.")
-    N = my_samples['total_samples']
+    N = my_samples['nsamples_select']
     nchan = my_samples['nchan']
     dt_us = my_samples['dt_us']
     with open('samples.metadata', 'wt') as f:
-        f.write(f'total_samples: {N}\n')
+        f.write(f'nsamples_select: {N}\n')
         f.write(f'nchan: {nchan}\n')
-        f.write(f'nsamples_after_trigger: {my_samples["nsamples_after_trigger"]}\n')
+        f.write(f'nsamples_select_pretrigger: {my_samples["nsamples_select_pretrigger"]}\n')
         f.write(f'trigger_mode: {my_samples["trigger_mode"]}\n')
         f.write(f'dt_us: {dt_us}\n')
         f.write(f'late_flag: {my_samples["late_flag"]}\n')
@@ -87,12 +94,12 @@ def main(sp, node_id):
             f.write('\n')
 
     #
-    print("With the full record of samples, make a plot.")
+    print("With the selected samples, make a plot.")
     import matplotlib.pyplot as plt
     fig, (ax0,ax1) = plt.subplots(2,1)
     ax0.set_title('AVR64EA28 eDAQS sampled data')
-    N = my_samples['total_samples']
-    print(f"number of samples after trigger={my_samples['nsamples_after_trigger']}")
+    N = my_samples['nsamples_select']
+    print(f"nsamples_select_pretrigger={my_samples['nsamples_select_pretrigger']}")
     ax0.plot(my_samples['data'][0][0:N]); ax0.set_ylabel('chan 0')
     ax1.plot(my_samples['data'][1][0:N]); ax1.set_ylabel('chan 1')
     ax1.set_xlabel('sample number')
