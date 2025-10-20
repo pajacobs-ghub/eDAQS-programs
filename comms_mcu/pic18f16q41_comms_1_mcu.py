@@ -17,67 +17,42 @@ class PIC18F16Q41_COMMS_1_MCU:
     COMMS-MCU service functions are built on RS485 messages.
     """
 
-    __slots__ = ['rs485']
+    __slots__ = ['rs485_node']
 
     def __init__(self, id_char, serial_port):
-        self.rs485 = rs485.Node(id_char, serial_port)
+        self.rs485_node = rs485.Node(id_char, serial_port)
         return
 
-    def command(self, cmd_txt):
-        '''
-        Sends the text of a command to the RS485 send function.
-        Returns the text of the RS485 return message.
-
-        Each command to the PIC MCU is encoded as the first character
-        of the command text. Any required data follows that character.
-
-        A return message should start with the same command character
-        and may have more text following that character.
-        A command that is not successful should send back a message
-        with the word "error" in it, together with some more information.
-        '''
-        cmd_char = cmd_txt[0]
-        self.rs485.send_command(cmd_txt)
-        txt = self.rs485.get_response()
-        if not txt.startswith(cmd_char):
-            raise RuntimeError(f'Unexpected response: {txt}')
-        txt = re.sub(cmd_char, '', txt, count=1).strip()
-        if txt.find('error') >= 0:
-            print("Warning: error return for command to COMMS-MCU.")
-            print(f"  cmd_txt: {cmd_txt}")
-            print(f"  response: {txt}")
-        return txt
-
     def get_version(self):
-        return self.command('v')
+        return self.rs485_node.command('v')
 
     def set_LED(self, val):
-        txt = self.command(f'L{val}')
+        txt = self.rs485_node.command(f'L{val}')
         return
 
     def assert_event_line_low(self):
-        txt = self.command('t')
+        txt = self.rs485_node.command('t')
         return
 
     def release_event_line(self):
-        txt = self.command('z')
+        txt = self.rs485_node.command('z')
         return
 
     def reset_DAQ_MCU(self):
-        txt = self.command('R')
+        txt = self.rs485_node.command('R')
         return
 
     def flush_rx2_buffer(self):
-        txt = self.command('F')
+        txt = self.rs485_node.command('F')
         return
 
     def test_DAQ_MCU_is_ready(self):
-        txt = self.command('Q')
+        txt = self.rs485_node.command('Q')
         event_txt, ready_txt = txt.split()
         return ready_txt == '1'
 
     def test_event_has_passed(self):
-        txt = self.command('Q')
+        txt = self.rs485_node.command('Q')
         event_txt, ready_txt = txt.split()
         return event_txt == '0'
 
@@ -90,14 +65,14 @@ class PIC18F16Q41_COMMS_1_MCU:
         level = int(level)
         if level < 0: level = 0
         if level > 255: level = 255
-        txt = self.command(f'w {level} 1')
+        txt = self.rs485_node.command(f'w {level} 1')
         return
 
     def set_VREF_off(self):
         '''
         Disable the analog-voltage output of the PIC MCU.
         '''
-        txt = self.command(f'w 0 0')
+        txt = self.rs485_node.command(f'w 0 0')
         return
 
     def enable_external_trigger(self, level, slope):
@@ -121,25 +96,24 @@ class PIC18F16Q41_COMMS_1_MCU:
         options = {'positive': 1, 'pos':1, '1':1, 1:1,
                    'negative':0, 'neg':0, '0':0, 0:0}
         slope = options[slope]
-        txt = self.command(f'e {level} {slope}')
+        txt = self.rs485_node.command(f'e {level} {slope}')
         if txt.find('error') >= 0:
             raise RuntimeError('Could not set external trigger.')
         return
 
     def disable_external_trigger(self):
-        txt = self.command_PIC(f'd')
+        txt = self.rs485_node.command_PIC(f'd')
         return
-
-    #---------------------------------------------------------------
-    # DAQ-MCU interaction functions are implemented
-    # by passing commands through the PIC18F16Q41 COMMS-MCU.
 
     def command_DAQ_MCU(self, cmd_txt):
         '''
         Wraps the cmd_txt as a pass-through-command and sends it.
         Returns the unwrapped response text.
+
+        All interaction with the DAQ-MCU is via these messages
+        to the COMMS-MCU.
         '''
-        txt = self.command('X%s' % cmd_txt)
+        txt = self.rs485_node.command('X%s' % cmd_txt)
         if txt.find('ok') >= 0:
             txt = re.sub('ok', '', txt, count=1).strip()
         else:

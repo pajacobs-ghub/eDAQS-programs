@@ -60,13 +60,13 @@ class Node(object):
 
     def send_command(self, cmd_txt):
         '''
-        Send the wrapped command text on the RS485 bus.
+        Send the wrapped command text on the RS485 bus to a specific COMMS-MCU.
 
         For notes, see PJ's workbook page 76, 2024-01-09.
         '''
         self.serial_port.reset_input_buffer()
         cmd_bytes = f'/{self.id_char}{cmd_txt}!\n'.encode('utf-8')
-        # print("cmd_bytes=", cmd_bytes)
+        # print("DEBUG cmd_bytes=", cmd_bytes)
         self.serial_port.write(cmd_bytes)
         self.serial_port.flush()
         return
@@ -79,6 +79,7 @@ class Node(object):
         For notes, see PJ's workbook page 76, 2024-01-09.
         '''
         txt = self.serial_port.readline().strip().decode('utf-8')
+        # print("DEBUG txt=", txt)
         if txt.startswith('/0'):
             if txt.find('#') < 0:
                 print('Incomplete RS485 response:', txt)
@@ -87,6 +88,31 @@ class Node(object):
                 txt = re.sub('#', '', txt).strip()
         else:
             raise RuntimeError(f'Invalid RS485 response: {txt}')
+        return txt
+
+    def command(self, cmd_txt):
+        '''
+        Sends the text of a command to the COMMS MCU.
+        Returns the text of the RS485 return message.
+
+        Each command to the COMMS MCU is encoded as the first character
+        of the command text. Any required data follows that character.
+
+        A return message should start with the same command character
+        and may have more text following that character.
+        A command that is not successful should send back a message
+        with the word "error" in it, together with some more information.
+        '''
+        cmd_char = cmd_txt[0]
+        self.send_command(cmd_txt)
+        txt = self.get_response()
+        if not txt.startswith(cmd_char):
+            raise RuntimeError(f'Unexpected response: {txt}')
+        txt = re.sub(cmd_char, '', txt, count=1).strip()
+        if txt.find('error') >= 0:
+            print("Warning: error return for command to COMMS-MCU.")
+            print(f"  cmd_txt: {cmd_txt}")
+            print(f"  response: {txt}")
         return txt
 
 
