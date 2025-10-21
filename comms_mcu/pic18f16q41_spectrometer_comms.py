@@ -12,7 +12,7 @@ import sys
 sys.path.append("..")
 from comms_mcu import rs485
 
-class PIC18F16Q41_SPECTROMETER_COMMS:
+class PIC18F16Q41_SPECTROMETER_COMMS(object):
     """
     COMMS-MCU service functions are built on RS485 messages.
     """

@@ -111,7 +111,7 @@ class AVR64EA28_DAQ_MCU(object):
             '2v500':4, '2.500':4, 4:4,
         }
         self.ref_voltages_int_to_value = {
-            0:4.75,  # Approximate value of Vsys after Schottyy diode drop.
+            0:4.75,  # Approximate value of Vsys after Schottky diode drop.
             1:1.024,
             2:2.048,
             3:4.096,
