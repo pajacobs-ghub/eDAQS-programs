@@ -80,10 +80,10 @@ if __name__ == '__main__':
         print(node1.get_version())
         for i in range(5):
             print(f"For AVR {i}:")
-            txt = node1.command_DAQ_MCU(i, [124])
-            print("cmd response A=", txt)
-            txt = node1.command_DAQ_MCU(i, [0,]+20*[0,])
-            print("cmd response B=", txt)
+            mybytes = node1.command_DAQ_MCU(i, [124])
+            print("cmd response A=", mybytes)
+            mybytes = node1.command_DAQ_MCU(i, [0,]+20*[0,])
+            print("cmd response B=", mybytes)
         time.sleep(1.0)
         node1.set_LED(0)
     else:
