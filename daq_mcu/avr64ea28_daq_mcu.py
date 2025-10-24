@@ -7,6 +7,7 @@ import sys
 sys.path.append("..")
 from comms_mcu import rs485
 from comms_mcu.pic18f16q41_comms_1_mcu import PIC18F16Q41_COMMS_1_MCU
+import struct
 
 class AVR64EA28_DAQ_MCU(object):
     """

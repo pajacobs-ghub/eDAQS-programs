@@ -7,6 +7,7 @@ import sys
 sys.path.append("..")
 from comms_mcu import rs485
 from comms_mcu.pic18f16q41_spectrometer_comms import PIC18F16Q41_SPECTROMETER_COMMS
+import struct
 
 class AVR64EA28_SPI_DAQ(object):
     """
@@ -117,6 +118,18 @@ class AVR64EA28_SPI_DAQ(object):
         for i in range(len(mybytes)): mydict[self.reg_labels[i]] = mybytes[i]
         return mydict
 
+    def halt_sampling(self, iavr):
+        '''
+        '''
+        self.comms_MCU.command_DAQ_MCU(iavr, [112, 0])
+        return
+
+    def resume_sampling(self, iavr):
+        '''
+        '''
+        self.comms_MCU.command_DAQ_MCU(iavr, [112, 1])
+        return
+
     def set_PGA(self, iavr, gain='8X'):
         '''
         '''
@@ -131,7 +144,7 @@ class AVR64EA28_SPI_DAQ(object):
         self.comms_MCU.command_DAQ_MCU(iavr, [115, 0]) # 1X
         return
 
-    def set_analog_ref_voltage(self, iavr, vStr):
+    def set_ref_voltage(self, iavr, vStr):
         '''
         Select the reference voltage from a symbolic name.
         'VDD', '1v024', '2v048', '4v096', or '2v500'
@@ -141,7 +154,7 @@ class AVR64EA28_SPI_DAQ(object):
             refVsel = self.ref_voltages[vStr]
         except:
             refVsel = self.ref_voltages['4v096']
-        self.comms_MCU.command_DAQ_MCU(iavr, [113, refSel])
+        self.comms_MCU.command_DAQ_MCU(iavr, [113, refVsel])
         return
 
     def set_burst(self, iavr, n):
@@ -163,7 +176,7 @@ class AVR64EA28_SPI_DAQ(object):
 
     def get_sample_data(self, iavr):
         '''
-        Returns the current analog values for a specific AVR.
+        Returns a tuple containing the current analog values for a specific AVR.
         '''
         # First, send the command to put the data into the outgoing buffer.
         mybytes = self.comms_MCU.command_DAQ_MCU(iavr, [80])
@@ -171,8 +184,9 @@ class AVR64EA28_SPI_DAQ(object):
         mybytes = self.comms_MCU.command_DAQ_MCU(iavr, [0,]+18*[0,])
         # Discard the first 2 bytes because they were left in the AVR's SPI buffer
         # from a previous exchange.
-        mybytes = bytearray([b for b in mybytes[2:2+16]])
-        return mybytes
+        s = struct.Struct('>8h')
+        values = s.unpack_from(mybytes, offset=2)
+        return values
 
 if __name__ == '__main__':
     # A basic test to see if the eDAQS node is attached and awake.
@@ -198,9 +212,20 @@ if __name__ == '__main__':
         for i in range(5):
             print(f"For AVR {i}: version string = {avr.get_version(i)}")
             print(f"         : register bytes = {avr.get_register_bytes(i)}")
-            print(f"         : register bytes = {avr.get_registers_as_dict(i)}")
+            print(f"         : initially = {avr.get_registers_as_dict(i)}")
+            avr.set_ref_voltage(i, '1v024')
+            avr.set_PGA(i, '4X')
+            avr.set_burst(i, 'ACC16')
+            print(f"         : with V_REF=1v024 and PGA=4X = {avr.get_registers_as_dict(i)}")
             print(f"         : analog values = {avr.get_sample_data(i)}")
         time.sleep(1.0)
+        print("Suspend and then resume sampling.")
+        for i in range(5): avr.halt_sampling(i)
+        time.sleep(1)
+        for i in range(5): avr.resume_sampling(i)
+        time.sleep(1)
+        for i in range(5):
+            print(f"For AVR {i}: analog values = {avr.get_sample_data(i)}")
         node1.set_LED(0)
     else:
         print("Did not find the serial port.")

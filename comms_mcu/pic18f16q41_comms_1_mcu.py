@@ -6,7 +6,6 @@
 import argparse
 import time
 import re
-import struct
 
 import sys
 sys.path.append("..")
