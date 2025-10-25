@@ -2,6 +2,7 @@
 # Monitor the 40 differential channels and report their values.
 #
 # 2025-10-24 PJ Basic demonstration adapted from 2024 demo.
+# 2025-10-25    Faster fetching of data.
 
 import sys
 sys.path.append("../..")
@@ -11,7 +12,9 @@ from comms_mcu import rs485
 from comms_mcu.pic18f16q41_spectrometer_comms import PIC18F16Q41_SPECTROMETER_COMMS
 from comms_mcu.pic18f16q41_comms_1_mcu import PIC18F16Q41_COMMS_1_MCU
 from daq_mcu.avr64ea28_spi_daq import AVR64EA28_SPI_DAQ
+import struct
 
+FAST_FETCH = True
 
 def main(sp, node_id, fileName):
     print("Differential spectrometer with 40-channel DAQ board.")
@@ -31,16 +34,27 @@ def main(sp, node_id, fileName):
     print(f"Start asking for data and record it to file: {fileName}")
     print("Press Control-C (KeyboardInterrupt) to stop recording.")
     f = open(fileName, 'w')
+    s = struct.Struct('>40h')
+    time.sleep(1.0)
     try:
         while True:
             # Note that we want the fractional part of the seconds,
             # so get the floating-point representation of time.
             t = time.time()
             stamped_text = f"{t}"
-            for i in range(5):
-                analog_values = avr.get_sample_data(i)
-                for j in range(8):
-                    stamped_text += ' %d' % analog_values[j]
+            if FAST_FETCH:
+                # Fetch the analog data in a single RS485 command.
+                txt = avr.fetch_all_analog_samples()
+                mybytes = bytes.fromhex(txt)
+                values = s.unpack_from(mybytes)
+                for v in values:
+                    stamped_text += " %d" % v
+            else:
+                # Fetch the analog data the slow way.
+                for i in range(5):
+                    analog_values = avr.get_sample_data(i)
+                    for j in range(8):
+                        stamped_text += ' %d' % analog_values[j]
             f.write(stamped_text+'\n')
             print(stamped_text)
     except KeyboardInterrupt:

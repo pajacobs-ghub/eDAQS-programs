@@ -188,6 +188,14 @@ class AVR64EA28_SPI_DAQ(object):
         values = s.unpack_from(mybytes, offset=2)
         return values
 
+    def fetch_all_analog_samples(self):
+        '''
+        Issue the command to the PIC18 to gather up the analog data
+        from all of the AVRs and return it as a single message.
+        Returns the content of that message as a string.
+        '''
+        return self.comms_MCU.rs485_node.command('D')
+
 if __name__ == '__main__':
     # A basic test to see if the eDAQS node is attached and awake.
     # Assuming that you have node '2', typical use on a Linux box:
@@ -226,6 +234,8 @@ if __name__ == '__main__':
         time.sleep(1)
         for i in range(5):
             print(f"For AVR {i}: analog values = {avr.get_sample_data(i)}")
+        for i in range(3):
+            print("All analog data=", avr.fetch_all_analog_samples())
         node1.set_LED(0)
     else:
         print("Did not find the serial port.")
