@@ -26,6 +26,12 @@ class PIC18F16Q41_SPECTROMETER_COMMS(object):
     def get_version(self):
         return self.rs485_node.command('v')
 
+    def suppress_LED(self):
+        return self.rs485_node.command('s')
+
+    def allow_LED(self):
+        return self.rs485_node.command('a')
+
     def set_LED(self, val):
         txt = self.rs485_node.command(f'L{val}')
         return

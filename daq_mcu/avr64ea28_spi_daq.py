@@ -2,6 +2,7 @@
 #
 # Peter J.
 # 2025-10-20: Adapted from avr64ea28_daq_mcu.py.
+# 2025-10-26: Functions to control on-board LEDs.
 #
 import sys
 sys.path.append("..")
@@ -29,13 +30,13 @@ class AVR64EA28_SPI_DAQ(object):
         #
         # The following data should match the firmware programmed into the AVR.
         # A dictionary is used so that it is easy to cross-check the labels.
-        self.n_reg = 5
+        self.n_reg = 6
         self.reg_labels = {
-            0:'STATE', 1:'V_REF', 2:'PGA_FLAG', 3:'PGA_GAIN', 4:'NBURST'
+            0:'STATE', 1:'V_REF', 2:'PGA_FLAG', 3:'PGA_GAIN', 4:'NBURST', 5:'ALLOW_LED'
         }
         assert self.n_reg == len(self.reg_labels), "Oops, check reg_labels."
         self.reg_labels_to_int = {
-            'STATE':0, 'V_REF':1, 'PGA_FLAG':2, 'PGA_GAIN':3, 'NBURST':4
+            'STATE':0, 'V_REF':1, 'PGA_FLAG':2, 'PGA_GAIN':3, 'NBURST':4, 'ALLOW_LED':5
         }
         assert self.n_reg == len(self.reg_labels_to_int), "Oops, check reg_labels_to_int."
         self.pga_gains = {
@@ -174,6 +175,30 @@ class AVR64EA28_SPI_DAQ(object):
         self.comms_MCU.command_DAQ_MCU(iavr, [116, log2n])
         return
 
+    def suppress_LED(self, iavr):
+        '''
+        '''
+        self.comms_MCU.command_DAQ_MCU(iavr, [117, 0])
+        return
+
+    def allow_LED(self, iavr):
+        '''
+        '''
+        self.comms_MCU.command_DAQ_MCU(iavr, [117, 1])
+        return
+
+    def turn_off_LED(self, iavr):
+        '''
+        '''
+        self.comms_MCU.command_DAQ_MCU(iavr, [126,])
+        return
+
+    def turn_on_LED(self, iavr):
+        '''
+        '''
+        self.comms_MCU.command_DAQ_MCU(iavr, [127,])
+        return
+
     def get_sample_data(self, iavr):
         '''
         Returns a tuple containing the current analog values for a specific AVR.
@@ -229,6 +254,11 @@ if __name__ == '__main__':
         time.sleep(1.0)
         print("Suspend and then resume sampling.")
         for i in range(5): avr.halt_sampling(i)
+        for i in range(5):
+            time.sleep(0.5)
+            avr.turn_on_LED(i)
+            time.sleep(0.5)
+            avr.turn_off_LED(i)
         time.sleep(1)
         for i in range(5): avr.resume_sampling(i)
         time.sleep(1)

@@ -15,10 +15,15 @@ from daq_mcu.avr64ea28_spi_daq import AVR64EA28_SPI_DAQ
 import struct
 
 FAST_FETCH = True
+ALLOW_LED = True
 
 def main(sp, node_id, fileName):
     print("Differential spectrometer with 40-channel DAQ board.")
     node1 = PIC18F16Q41_SPECTROMETER_COMMS(node_id, sp)
+    if ALLOW_LED:
+        node1.allow_LED()
+    else:
+        node1.suppress_LED()
     print(node1.get_version())
     avr = AVR64EA28_SPI_DAQ(node1)
     for i in range(5):
@@ -28,6 +33,10 @@ def main(sp, node_id, fileName):
         # avr.set_PGA(i, '4X')
         avr.set_burst(i, 'ACC16')
         # avr.resume_sampling(i)
+        if ALLOW_LED:
+            avr.allow_LED(i)
+        else:
+            avr.suppress_LED(i)
         # print(f"         : register bytes = {avr.get_register_bytes(i)}")
         print(f"         : registers = {avr.get_registers_as_dict(i)}")
     #
