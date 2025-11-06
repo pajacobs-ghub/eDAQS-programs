@@ -17,7 +17,7 @@ ANSI_GREEN  = " \27[32m "
 ANSI_PINK  = " \27[35m "
 ANSI_RESET = " \27[0m "
 
-class PICO2_ADS141M04_DAQ(object):
+class PICO2_ADS131M04_DAQ(object):
     """
     DAC_MCU service functions for the Pico2 microcontroller
     connected to the ADS141M04 ADC. Specifically for Jeremy's SUPER-ADC boards.
@@ -48,12 +48,42 @@ class PICO2_ADS141M04_DAQ(object):
         """
         return self.comms_MCU.command_DAQ_MCU('I')
     
+    def single_sample_as_ints(self):
+        """
+        Take a single sample and return as a list of 24-bit signed integers.
+        Returns: [ch0, ch1, ch2, ch3]
+        """
+        result = self.single_sample()
+        return [int(x) for x in result.split()]
+    
+    def single_sample_as_volts(self, vref=1.2, gain=1):
+        """
+        Take a single sample and convert to voltages.
+        
+        Args:
+            vref: Reference voltage in volts (default 1.2V for internal reference)
+            gain: PGA gain setting (default 1, can be 1, 2, 4, 8, 16, 32, 64, 128)
+        
+        Returns: List of voltages [ch0_v, ch1_v, ch2_v, ch3_v]
+        
+        Formula: Voltage = (ADC_Code / 2^23) * (VREF / Gain)
+        where ADC_Code is 24-bit signed (-8388608 to +8388607)
+        """
+        adc_values = self.single_sample_as_ints()
+        # ADS131M04 is 24-bit, so full scale is ±2^23
+        full_scale = 2**23  # 8388608
+        voltages = [(code / full_scale) * (vref / gain) for code in adc_values]
+        return voltages
+       
     def error_flags(self):
         """
         Get the current error flags from the ADS141M04.
         """
         return self.comms_MCU.command_DAQ_MCU('k')
     
+    def sample(self):
+        return self.comms_MCU.command_DAQ_MCU('g')
+
     def enable_LED(self):
         return self.comms_MCU.command_DAQ_MCU('L,1')
     
@@ -87,7 +117,7 @@ if __name__ == '__main__':
             node1.reset_DAQ_MCU()
             time.sleep(2.0)
         node1.flush_rx2_buffer()
-        daq_mcu = PICO2_ADS141M04_DAQ(node1)
+        daq_mcu = PICO2_ADS131M04_DAQ(node1)
         print(daq_mcu.get_version())
 
 

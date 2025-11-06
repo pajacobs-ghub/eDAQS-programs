@@ -11,7 +11,7 @@ import os
 from comms_mcu import rs485
 from comms_mcu.pic18f16q41_jm_ads131m04_comms import PIC18F16Q41_JM_ADS131M04_COMMS
 from comms_mcu.pic18f16q41_comms_1_mcu import PIC18F16Q41_COMMS_1_MCU
-from daq_mcu.pico2_ads141m04 import PICO2_ADS141M04_DAQ
+from daq_mcu.pico2_ads131m04 import PICO2_ADS131M04_DAQ
 
 import struct
 
@@ -20,13 +20,20 @@ FAST_FETCH = True
 def main(sp, node_id, fileName):
     print("SUPER-ADC ADS131M04 board monitor.")
     node1 = PIC18F16Q41_JM_ADS131M04_COMMS(node_id, sp)
-    daq = PICO2_ADS141M04_DAQ(node1)
+    daq = PICO2_ADS131M04_DAQ(node1)
     print(node1.get_version())
+    #node1.reset_DAQ_MCU()
+    #time.sleep(2)
     print(daq.get_version())
     print(daq.reset_registers())
-    print(daq.single_sample())
-    print(daq.error_flags())
-    daq.enable_LED()
+    
+    # Get raw ADC codes
+    codes = daq.single_sample_as_ints()
+    print(f"Raw codes: {codes}")
+
+    # Convert to voltages with default settings (1.2V ref, gain=1)
+    voltages = daq.single_sample_as_volts()
+    print(f"Voltages: {voltages}")
 
 
 
