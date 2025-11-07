@@ -505,8 +505,16 @@ class AVR64EA28_DAQ_MCU(object):
         bytes_per_sample_set = self.get_byte_size_of_sample_set()
         nchan = self.get_nchannels()
         nsamples_after_trigger = self.get_nsamples()
-        total_samples = self.get_max_nsamples()
-        nsamples_before_trigger = total_samples - nsamples_after_trigger
+        trigger_mode = self.get_trigger_mode()
+        if trigger_mode == 0:
+            # IMMEDIATE mode
+            total_samples = nsamples_after_trigger
+            nsamples_before_trigger = 0
+        else:
+            # Recording starts before trigger event,
+            # at some indeterminant time.
+            total_samples = self.get_max_nsamples()
+            nsamples_before_trigger = total_samples - nsamples_after_trigger
         # The oldest sample set in SRAM has index 0.
         trigger_sample_index = nsamples_before_trigger
         if DEBUG:
@@ -550,13 +558,13 @@ class AVR64EA28_DAQ_MCU(object):
             addr = (i+first_page_index) * 32
             if addr >= total_bytes: addr -= total_bytes
             if i > 0 and (i % 100) == 0: print(f'page {i} byte-address {addr}')
-            bpage = self.get_AVR_page_of_bytes(addr)
+            bpage = self.get_page_of_bytes(addr)
             for j in range(32): _ba[addr+j] = bpage[j]
         #
         # Other metadata to include with the bytearray.
         mode = self.get_trigger_mode()
         dt_us = self.get_sample_period_us()
-        late_flag = self._did_not_keep_up_during_sampling()
+        late_flag = self.did_not_keep_up_during_sampling()
         analog_gain = self.get_analog_gain()
         ref_voltage = self.get_analog_ref_voltage()
         return {'total_bytes':total_bytes,
