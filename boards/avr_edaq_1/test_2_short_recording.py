@@ -20,6 +20,7 @@ def main(sp, node_id):
     node1.flush_rx2_buffer()
     daq_mcu = AVR64EA28_DAQ_MCU(node1)
     print(daq_mcu.get_version())
+    daq_mcu.set_regs_to_factory_values()
     #
     daq_mcu.clear_PGA()
     daq_mcu.set_differential_conversion()

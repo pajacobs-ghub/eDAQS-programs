@@ -18,6 +18,7 @@ def main(sp, node_id):
     node1.flush_rx2_buffer()
     daq_mcu = AVR64EA28_DAQ_MCU(node1)
     print(daq_mcu.get_version())
+    daq_mcu.set_regs_to_factory_values()
     #
     print("Exercise the software trigger line.")
     node1.assert_event_line_low()
