@@ -101,7 +101,7 @@ class PIC18F16Q41_COMMS_1_MCU(object):
         return
 
     def disable_external_trigger(self):
-        txt = self.rs485_node.command_PIC(f'd')
+        txt = self.rs485_node.command(f'd')
         return
 
     def command_DAQ_MCU(self, cmd_txt):
