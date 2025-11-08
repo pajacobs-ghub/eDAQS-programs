@@ -50,13 +50,13 @@ def main(sp, node_id):
     # Make sure that PIC has not been asked to hold EVENT# low.
     node1.release_event_line()
     node1.disable_external_trigger()
-    print("Before enabling trigger, result of Q command:", node1.rs485_node.command('Q'))
+    print("Before enabling trigger, result of Q command:", node1.command_COMMS_MCU('Q'))
     #
     daq_mcu.start_sampling()
     while not node1.test_event_has_passed():
         print("Waiting for trigger...")
         time.sleep(1.0)
-    print("After trigger, result of Q command:", node1.rs485_node.command('Q'))
+    print("After trigger, result of Q command:", node1.command_COMMS_MCU('Q'))
     # Even though event has passed, the AVR may be still sampling.
     ready = node1.test_DAQ_MCU_is_ready()
     while not ready:

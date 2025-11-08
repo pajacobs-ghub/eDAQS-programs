@@ -23,12 +23,12 @@ def main(sp, node_id):
     node1.release_event_line()
     node1.disable_external_trigger()
     #
-    print("Before enabling trigger, result of Q command:", node1.rs485_node.command('Q'))
+    print("Before enabling trigger, result of Q command:", node1.command_COMMS_MCU('Q'))
     node1.enable_external_trigger(64, 'pos')
     while not node1.test_event_has_passed():
         print("Waiting...")
         time.sleep(1.0)
-    print("After trigger, result of Q command:", node1.rs485_node.command('Q'))
+    print("After trigger, result of Q command:", node1.command_COMMS_MCU('Q'))
     node1.disable_external_trigger()
     node1.set_LED(0)
     return
