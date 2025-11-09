@@ -158,7 +158,7 @@ if __name__ == '__main__':
             node1.reset_DAQ_MCU()
             time.sleep(2.0)
         node1.flush_rx2_buffer()
-        # print(node1.command_DAQ_MCU('v'))
+        print(node1.command_DAQ_MCU('v'))
         time.sleep(1.0)
         node1.set_LED(0)
     else:
