@@ -1,9 +1,8 @@
-# jm_ads131m04_test.py
+# jm_ads131m04_trig_test.py
 # This script is specific to Jeremy's "SUPER-ADC ADS131M04" board, either Revision B or C.
-# Monitor 2 differential channels and report their values.
+# Arm eDAQS to wait for an external trigger signal, then take a single sample and report the values.
 #
-# 2025-11-05    First pass, adapted from diff_spec_monitor.py.
-# 2025-11-09    Added OSR sweep test.
+# JM 2025-11-09    First pass, adapted from diff_spec_monitor.py and test_6_external_trigger.py.
 
 import sys
 sys.path.append("../..")
@@ -21,47 +20,38 @@ def main(sp, node_id, fileName):
     print("SUPER-ADC ADS131M04 board monitor.")
     node1 = PIC18F16Q41_JM_ADS131M04_COMMS(node_id, sp)
     daq = PICO2_ADS131M04_DAQ(node1)
+
+    # Get versions, and reset DAQ_MCU
     print(node1.get_version())
-    #node1.reset_DAQ_MCU()
-    #time.sleep(2)
+    node1.reset_DAQ_MCU()
+    time.sleep(1.6)
     print(daq.get_version())
+
+    # Configure ADS131M04
     print(daq.set_clk(8192))  # Set clock to 8192 kHz
+    daq.set_osr(1024) # Default OSR
+    daq.set_trigger_mode(2)  # External trigger
+    daq.set_num_samples(24)  # 24 samples per channel
+    print("DAQ_MCU ready: ".format(node1.test_DAQ_MCU_is_ready()))
 
-    # SWEEP through all OSR values
-    print("\n=== OSR Sweep Test ===")
-    osr_values = [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16256]
-    
-    for osr in osr_values:
-        print(f"\nTesting OSR={osr}...")
-        result = daq.set_osr(osr)
-        print(f"  Set OSR: {result}")
-        
-        # Get raw ADC codes
-        codes = daq.single_sample_as_ints()
-        print(f"  Raw codes: {codes}")
-        
-        # Check error flags
-        errors = daq.error_flags()
-        print(f"  Error flags: {errors} (type: {type(errors)})")
-        
-        if int(errors) != 0:
-            print(f"  *** ERROR: Non-zero error flag ({errors}) for OSR={osr}! ***")
-        else:
-            print(f"  ✓ OSR={osr} passed")
-    
-    print("\n=== OSR Sweep Test Complete ===")
-    
-    # Reset to default OSR
-    print("\nResetting to OSR=1024...")
-    print(daq.set_osr(1024))
-    
-    # Get raw ADC codes
-    codes = daq.single_sample_as_ints()
-    print(f"Raw codes: {codes}")
+    # Make sure that PIC has not been asked to hold EVENT# low.
+    node1.release_event_line()
+    node1.disable_external_trigger()
+    #
+    print("Before enabling trigger, result of Q command:", node1.command_COMMS_MCU('Q'))
+    node1.enable_external_trigger(64, 'pos')
+    daq.sample()  # Start sampling process
+    node1.set_LED(1)
+    while not node1.test_event_has_passed():
+        print("Waiting...")
+        print(node1.command_COMMS_MCU('a'))
+        time.sleep(1.0)
+    print("After trigger, result of Q command:", node1.command_COMMS_MCU('Q'))
+    node1.disable_external_trigger()
+    node1.set_LED(0)
+    return
 
-    # print error flags
-    errors = daq.error_flags()
-    print(f"Error flags: {errors}")
+    
 
 
 

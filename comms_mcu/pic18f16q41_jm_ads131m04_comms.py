@@ -105,7 +105,10 @@ class PIC18F16Q41_JM_ADS131M04_COMMS(object):
         # Use direct COMMS-MCU command
         txt = self.rs485_node.command('d')
         return
-
+    
+    def command_COMMS_MCU(self, cmd_txt):
+        return self.rs485_node.command(cmd_txt)
+    
     def command_DAQ_MCU(self, cmd_txt):
         '''
         Wraps the cmd_txt as a pass-through-command and sends it.
