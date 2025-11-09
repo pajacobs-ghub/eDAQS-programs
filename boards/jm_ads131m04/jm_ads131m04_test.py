@@ -1,8 +1,9 @@
-# jm_ads131m04_monitor.py
+# jm_ads131m04_test.py
 # This script is specific to Jeremy's "SUPER-ADC ADS131M04" board, either Revision B or C.
 # Monitor 2 differential channels and report their values.
 #
 # 2025-11-05    First pass, adapted from diff_spec_monitor.py.
+# 2025-11-09    Added OSR sweep test.
 
 import sys
 sys.path.append("../..")
@@ -10,7 +11,6 @@ import time
 import os
 from comms_mcu import rs485
 from comms_mcu.pic18f16q41_jm_ads131m04_comms import PIC18F16Q41_JM_ADS131M04_COMMS
-from comms_mcu.pic18f16q41_comms_1_mcu import PIC18F16Q41_COMMS_1_MCU
 from daq_mcu.pico2_ads131m04 import PICO2_ADS131M04_DAQ
 
 import struct
@@ -25,15 +25,43 @@ def main(sp, node_id, fileName):
     #node1.reset_DAQ_MCU()
     #time.sleep(2)
     print(daq.get_version())
-    print(daq.reset_registers())
+    print(daq.set_clk(8192))  # Set clock to 8192 kHz
+
+    # SWEEP through all OSR values
+    print("\n=== OSR Sweep Test ===")
+    osr_values = [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16256]
+    
+    for osr in osr_values:
+        print(f"\nTesting OSR={osr}...")
+        result = daq.set_osr(osr)
+        print(f"  Set OSR: {result}")
+        
+        # Get raw ADC codes
+        codes = daq.single_sample_as_ints()
+        print(f"  Raw codes: {codes}")
+        
+        # Check error flags
+        errors = daq.error_flags()
+        print(f"  Error flags: {errors} (type: {type(errors)})")
+        
+        if int(errors) != 0:
+            print(f"  *** ERROR: Non-zero error flag ({errors}) for OSR={osr}! ***")
+        else:
+            print(f"  ✓ OSR={osr} passed")
+    
+    print("\n=== OSR Sweep Test Complete ===")
+    
+    # Reset to default OSR
+    print("\nResetting to OSR=1024...")
+    print(daq.set_osr(1024))
     
     # Get raw ADC codes
     codes = daq.single_sample_as_ints()
     print(f"Raw codes: {codes}")
 
-    # Convert to voltages with default settings (1.2V ref, gain=1)
-    voltages = daq.single_sample_as_volts()
-    print(f"Voltages: {voltages}")
+    # print error flags
+    errors = daq.error_flags()
+    print(f"Error flags: {errors}")
 
 
 

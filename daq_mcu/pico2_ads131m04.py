@@ -1,87 +1,108 @@
 # pico2_ads141m04.py
-#
-# Jeremy M.
-# 2025-10-20: Adapted from avr64ea28_daq_mcu.py.
-# 2025-10-26: Functions to control on-board LEDs.
-# 2025-11-06: Modified for Jeremy's ADS141M04 board.
+# Jeremy M. 2025-10-20: Adapted from avr64ea28_daq_mcu.py.
 
 import sys
 sys.path.append("..")
 from comms_mcu import rs485
 from comms_mcu.pic18f16q41_jm_ads131m04_comms import PIC18F16Q41_JM_ADS131M04_COMMS
 import struct
+import time
 
 # ANSI color codes
-ANSI_YELLOW = " \27[33m "
-ANSI_GREEN  = " \27[32m "
-ANSI_PINK  = " \27[35m "
-ANSI_RESET = " \27[0m "
+ANSI_YELLOW = "\033[33m"
+ANSI_GREEN  = "\033[32m"
+ANSI_PINK   = "\033[35m"
+ANSI_RESET  = "\033[0m"
 
 class PICO2_ADS131M04_DAQ(object):
-    """
-    DAC_MCU service functions for the Pico2 microcontroller
-    connected to the ADS141M04 ADC. Specifically for Jeremy's SUPER-ADC boards.
-    """
-
+    # DAQ_MCU service functions for Pico2 with ADS131M04 ADC
     __slots__ = ['comms_MCU']
+    
     def __init__(self, comms_MCU):
-        '''
-        We do all of the interaction with the DAQ_MCU through the COMMS_MCU.
-        '''
+        # All interaction with DAQ_MCU goes through COMMS_MCU
         self.comms_MCU = comms_MCU
 
     def get_version(self):
-        """
-        Gets the version string from the DAQ_MCU.
-        """
+        # Get version string from DAQ_MCU
         return self.comms_MCU.command_DAQ_MCU('v')
 
     def reset_registers(self):
-        """
-        Resets all ADS141M04 registers to default values.
-        """
+        # Reset all registers to default values
         return self.comms_MCU.command_DAQ_MCU('F')
     
+    def _set_register(self, reg, val):
+        # Private: Set virtual register (0-6)
+        return self.comms_MCU.command_DAQ_MCU(f's,{reg},{val}')
+    
+    def get_register(self, reg):
+        # Get virtual register value: 0=f_CLKIN(kHz), 1=OSR, 2=n_samples, 3=trig_mode,
+        # 4=trig_ch, 5=trig_level, 6=trig_slope
+        return self.comms_MCU.command_DAQ_MCU(f'r,{reg}')
+    
+    # Public setter functions
+    def set_clk(self, clk):
+        # Set clock rate in kHz
+        return self._set_register(0, clk)
+    def set_osr(self, osr):
+        # Set over-sampling ratio, auto-rounds to nearest valid: 128, 256, 512, 1024, 2048, 4096, 8192, 16256
+        valid_osr = [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16256]
+        # Find nearest valid OSR
+        nearest = min(valid_osr, key=lambda x: abs(x - osr))
+        # Let the user know what was chosen
+        print(f"{ANSI_YELLOW}Selected OSR: {nearest}{ANSI_RESET}")
+        # we're going to do a kSPS check, pull the clock rate from register 0
+        clock_rate = float(self.get_register(0))
+        print(f"{ANSI_PINK}Clock rate (kHz): {clock_rate}{ANSI_RESET}")
+        # print the sample period in uS
+        sample_period = (2000 * float(nearest)) / clock_rate # in microseconds
+        kSPS = clock_rate / (2*float(nearest)) # ADS131M04 section 9.2.2.3
+        print(f"{ANSI_GREEN}Period (uS): {sample_period:.2f}, kSPS: {kSPS}{ANSI_RESET}")
+        return self._set_register(1, nearest)
+    
+    def set_num_samples(self, n_samples):
+        # Set number of samples in record after trigger event
+        return self._set_register(2, n_samples)
+    
+    def set_trigger_mode(self, mode):
+        # Set trigger mode: 0=immediate, 1=internal, 2=external
+        return self._set_register(3, mode)
+    
+    def set_trigger_channel(self, channel):
+        # Set trigger channel for internal trigger (0-3)
+        return self._set_register(4, channel)
+    
+    def set_trigger_level(self, level):
+        # Set trigger level as signed integer
+        return self._set_register(5, level)
+    
+    def set_trigger_slope(self, slope):
+        # Set trigger slope: 0=sample-below-level, 1=sample-above-level
+        return self._set_register(6, slope)
+    
     def single_sample(self):
-        """
-        Take a single sample from the ADS141M04 and return the raw data as a list of integers.
-        """
+        # Take single sample, return raw data string
         return self.comms_MCU.command_DAQ_MCU('I')
     
     def single_sample_as_ints(self):
-        """
-        Take a single sample and return as a list of 24-bit signed integers.
-        Returns: [ch0, ch1, ch2, ch3]
-        """
+        # Take single sample, return [ch0, ch1, ch2, ch3] as ints
         result = self.single_sample()
         return [int(x) for x in result.split()]
     
-    def single_sample_as_volts(self, vref=1.2, gain=1):
-        """
-        Take a single sample and convert to voltages.
-        
-        Args:
-            vref: Reference voltage in volts (default 1.2V for internal reference)
-            gain: PGA gain setting (default 1, can be 1, 2, 4, 8, 16, 32, 64, 128)
-        
-        Returns: List of voltages [ch0_v, ch1_v, ch2_v, ch3_v]
-        
-        Formula: Voltage = (ADC_Code / 2^23) * (VREF / Gain)
-        where ADC_Code is 24-bit signed (-8388608 to +8388607)
-        """
+    def single_sample_as_volts(self):
+        # Convert sample to voltages: V = (code/2^23) * (vref/gain)
+        vref = 1.2  # Default internal reference
+        gain = 1    # Default PGA gain
         adc_values = self.single_sample_as_ints()
-        # ADS131M04 is 24-bit, so full scale is ±2^23
-        full_scale = 2**23  # 8388608
+        full_scale = 2**23  # 24-bit ADC
         voltages = [(code / full_scale) * (vref / gain) for code in adc_values]
         return voltages
        
     def error_flags(self):
-        """
-        Get the current error flags from the ADS141M04.
-        """
+        # Get current error flags
         return self.comms_MCU.command_DAQ_MCU('k')
     
     def sample(self):
+        # Start sampling process
         return self.comms_MCU.command_DAQ_MCU('g')
 
     def enable_LED(self):
@@ -91,9 +112,7 @@ class PICO2_ADS131M04_DAQ(object):
         return self.comms_MCU.command_DAQ_MCU('L,0')
 
 if __name__ == '__main__':
-    # A basic test to see if the eDAQS node is attached and awake.
-    # Assuming that you have node '2', typical use on a Linux box:
-    # $ python3 avr64ea28_daq_mcu.py -i 2
+    # Basic test: python3 pico2_ads131m04.py -p /dev/ttyUSB0 -i 1
     import argparse
     import time
     parser = argparse.ArgumentParser(description="eDAQS node test program")
@@ -107,11 +126,10 @@ if __name__ == '__main__':
     sp = rs485.openPort(port_name)
     if sp:
         node1 = PIC18F16Q41_JM_ADS131M04_COMMS(node_id, sp)
-        print("Just some fiddling around to see that board is alive.")
+        print("Testing board connection...")
         node1.set_LED(1)
         print(node1.get_version())
-        # If we have been reprogramming the DAQ_MCU while the PIC18 is running,
-        # we will likely have rubbish characters in the PIC18's RX2 buffer.
+        # Reset DAQ_MCU if needed (e.g., after reprogramming)
         if not node1.test_DAQ_MCU_is_ready():
             print("Reset DAQ_MCU")
             node1.reset_DAQ_MCU()
@@ -119,7 +137,6 @@ if __name__ == '__main__':
         node1.flush_rx2_buffer()
         daq_mcu = PICO2_ADS131M04_DAQ(node1)
         print(daq_mcu.get_version())
-
 
         time.sleep(1.0)
         node1.set_LED(0)
