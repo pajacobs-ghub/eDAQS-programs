@@ -202,9 +202,13 @@ def main(sp, node_id):
         sp: Serial port object
         node_id: Node identifier
     """
-    print("SUPER-ADC ADS131M04 Real-Time Voltage Monitor (DearPyGui)")
-    print("=" * 60)
-    
+   
+    print("\n =====================================")
+    print(" SUPER-ADC ADS131M04")
+    print(" Real-Time Voltage Monitor (DearPyGui)")
+    print(" version 2025-11-10 JM")
+    print(" =====================================")
+
     node1 = PIC18F16Q41_JM_ADS131M04_COMMS(node_id, sp)
     daq = PICO2_ADS131M04_DAQ(node1)
     
