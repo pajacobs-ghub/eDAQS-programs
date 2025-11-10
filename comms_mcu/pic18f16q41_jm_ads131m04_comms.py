@@ -48,32 +48,13 @@ class PIC18F16Q41_JM_ADS131M04_COMMS(object):
 
     def test_DAQ_MCU_is_ready(self):
         txt = self.rs485_node.command('Q')
-        event_txt, ready_txt = txt.split()
+        event_txt, ready_txt, = txt.split()
         return ready_txt == '1'
 
     def test_event_has_passed(self):
         txt = self.rs485_node.command('Q')
-        event_txt, ready_txt = txt.split()
+        event_txt, ready_txt, = txt.split()
         return event_txt == '0'
-
-    def set_VREF_on(self, level):
-        '''
-        Enable the analog-voltage output of the PIC MCU.
-        level is an 8-bit integer 0-255.
-        The output is set at (level/256 * 4.096) Volts.
-        '''
-        level = int(level)
-        if level < 0: level = 0
-        if level > 255: level = 255
-        txt = self.rs485_node.command(f'w {level} 1')
-        return
-
-    def set_VREF_off(self):
-        '''
-        Disable the analog-voltage output of the PIC MCU.
-        '''
-        txt = self.rs485_node.command(f'w 0 0')
-        return
 
     def enable_external_trigger(self, level, slope):
         '''

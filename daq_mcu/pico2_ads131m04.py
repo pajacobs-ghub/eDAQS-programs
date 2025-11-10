@@ -64,8 +64,8 @@ class PICO2_ADS131M04_DAQ(object):
         return self._set_register(2, n_samples)
     
     def set_trigger_mode(self, mode):
-        # Set trigger mode: 0=immediate, 1=internal, 2=external
-        return self._set_register(3, mode)
+        # Set trigger mode: 0=immediate, 1=internal, 2=external (default)
+        return self._set_register(2, mode)
     
     def set_trigger_channel(self, channel):
         # Set trigger channel for internal trigger (0-3)

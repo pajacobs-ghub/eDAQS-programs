@@ -18,12 +18,12 @@ FAST_FETCH = True
 
 def main(sp, node_id, fileName):
     print("SUPER-ADC ADS131M04 board monitor.")
-    node1 = PIC18F16Q41_JM_ADS131M04_COMMS(node_id, sp)
-    daq = PICO2_ADS131M04_DAQ(node1)
+    node = PIC18F16Q41_JM_ADS131M04_COMMS(node_id, sp)
+    daq = PICO2_ADS131M04_DAQ(node)
 
     # Get versions, and reset DAQ_MCU
-    print(node1.get_version())
-    node1.reset_DAQ_MCU()
+    print(node.get_version())
+    node.reset_DAQ_MCU()
     time.sleep(1.6)
     print(daq.get_version())
 
@@ -32,23 +32,24 @@ def main(sp, node_id, fileName):
     daq.set_osr(1024) # Default OSR
     daq.set_trigger_mode(2)  # External trigger
     daq.set_num_samples(24)  # 24 samples per channel
-    print("DAQ_MCU ready: ".format(node1.test_DAQ_MCU_is_ready()))
+    print("DAQ_MCU ready: ".format(node.test_DAQ_MCU_is_ready()))
 
     # Make sure that PIC has not been asked to hold EVENT# low.
-    node1.release_event_line()
-    node1.disable_external_trigger()
+    node.release_event_line()
+    node.disable_external_trigger()
     #
-    print("Before enabling trigger, result of Q command:", node1.command_COMMS_MCU('Q'))
-    node1.enable_external_trigger(64, 'pos')
+    print("Before enabling trigger, result of Q command:", node.command_COMMS_MCU('Q'))
+    print(node.enable_external_trigger(200, 'pos'))
     daq.sample()  # Start sampling process
-    node1.set_LED(1)
-    while not node1.test_event_has_passed():
+    node.set_LED(1)
+    while not node.test_event_has_passed():
         print("Waiting...")
-        print(node1.command_COMMS_MCU('a'))
+        print(node.command_COMMS_MCU('a'))
+        print(node.command_COMMS_MCU('Q'))
         time.sleep(1.0)
-    print("After trigger, result of Q command:", node1.command_COMMS_MCU('Q'))
-    node1.disable_external_trigger()
-    node1.set_LED(0)
+    print("After trigger, result of Q command:", node.command_COMMS_MCU('Q'))
+    node.disable_external_trigger()
+    node.set_LED(0)
     return
 
     
