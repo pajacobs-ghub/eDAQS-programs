@@ -12,14 +12,14 @@ from comms_mcu.pic18f16q41_jm_ads131m04_comms import PIC18F16Q41_JM_ADS131M04_CO
 from daq_mcu.pico2_ads131m04 import PICO2_ADS131M04_DAQ
 import struct
 
-NSELECT = 4000  # number of samples to fetch after the trigger
-NPRETRIGGER = 2000  # number of samples to fetch before the trigger
+NSAMPLES = 1024  # number of samples to fetch after the trigger
+NPRETRIGGER = 256  # number of samples to fetch before the trigger
 
 def main(sp, node_id, fileName):
-    print(" =====================================")
+    print("\n =====================================")
     print(" SUPER-ADC ADS131M04 TRIGGER TEST.")
     print(" version 2025-11-10 JM")
-    print(" =====================================")
+    print(" =====================================\n")
     node = PIC18F16Q41_JM_ADS131M04_COMMS(node_id, sp)
     daq = PICO2_ADS131M04_DAQ(node)
 
@@ -36,7 +36,7 @@ def main(sp, node_id, fileName):
     daq.set_osr(1024) # Default OSR
     daq.set_trigger_mode(2)  # External trigger
     #daq.set_trigger_mode(0)  # immediate trigger for testing
-    daq.set_num_samples(1024)  # 24 samples per channel
+    daq.set_num_samples(NSAMPLES)  # samples per channel
     print("DAQ_MCU ready: ", node.test_DAQ_MCU_is_ready())
     time.sleep(0.1)
     print("Maximum number of samples storable in SRAM:", node.command_DAQ_MCU('m'))
@@ -52,37 +52,68 @@ def main(sp, node_id, fileName):
     daq.sample()  # Start sampling process
 
     # Wait for trigger event
+    start_time = time.time()
     while not node.test_event_has_passed():
-        print("Waiting for trigger...")
-        time.sleep(1.0)
-    print("After trigger, result of Q command:", node.command_COMMS_MCU('Q'))
+        elapsed = time.time() - start_time
+        print(f"\r  Waiting for trigger... {elapsed:.1f}s", end='', flush=True)
+        time.sleep(0.2)
+    elapsed = time.time() - start_time
+    print("\nAfter trigger, result of Q command:", node.command_COMMS_MCU('Q'))
 
     # Even though event has passed, the DAQ_MCU may be still sampling.
     ready = node.test_DAQ_MCU_is_ready()
+    daq_start_time = time.time()
     while not ready:
-        print('Waiting for DAQ_MCU...')
+        daq_elapsed = time.time() - daq_start_time
+        print(f'\r  Waiting for DAQ_MCU... {daq_elapsed:.1f}s', end='', flush=True)
         time.sleep(0.1)
         ready = node.test_DAQ_MCU_is_ready()
-    print("After waiting for DAQ, result of Q command:", node.command_COMMS_MCU('Q'))
+    print("\nAfter waiting for DAQ, result of Q command:", node.command_COMMS_MCU('Q'))
 
     node.disable_external_trigger()
     daq.error_flags()
     node.set_LED(0)
 
     # After sampling completes
-    result = daq.fetch_SRAM_data(n_pretrigger=256)
+    result = daq.fetch_SRAM_data(n_pretrigger=NPRETRIGGER)
 
     # Access the data
     data_bytes = result['data']
     n_pre = result['nsamples_before_trigger']
     n_post = result['nsamples_after_trigger']
     total_samples = n_pre + n_post
+    nchan = result['nchan']
+    dt_us = result['dt_us']
 
-    # Reconstruct samples (each sample = 16 bytes)
-    for i in range(total_samples):
-        offset = i * 16
-        ch0, ch1, ch2, ch3 = struct.unpack('<4i', data_bytes[offset:offset+16])
-        #print(f"Sample {i}: [{ch0}, {ch1}, {ch2}, {ch3}]")
+    print(f"\nSaving data to {fileName}...")
+    
+    # Save metadata file
+    metadata_file = fileName.replace('.dat', '.metadata')
+    with open(metadata_file, 'wt') as f:
+        f.write(f'nsamples_total: {total_samples}\n')
+        f.write(f'nchan: {nchan}\n')
+        f.write(f'nsamples_before_trigger: {n_pre}\n')
+        f.write(f'nsamples_after_trigger: {n_post}\n')
+        f.write(f'trigger_index: {result["first_sample_index"]}\n')
+        f.write(f'trigger_mode: {result["trigger_mode"]}\n')
+        f.write(f'dt_us: {dt_us}\n')
+        f.write(f'index_of_oldest_data: {result["index_of_oldest_data"]}\n')
+    
+    # Save data file with samples
+    with open(fileName, 'wt') as f:
+        # Write header
+        hdr = 't(us) chan[0] chan[1] chan[2] chan[3]\n'
+        f.write(hdr)
+        
+        # Write data
+        for i in range(total_samples):
+            offset = i * 16
+            ch0, ch1, ch2, ch3 = struct.unpack('<4i', data_bytes[offset:offset+16])
+            f.write(f'{i*dt_us:.6f} {ch0} {ch1} {ch2} {ch3}\n')
+    
+    print(f"Data saved to {fileName}")
+    print(f"Metadata saved to {metadata_file}")
+    print(f"Total samples: {total_samples} ({n_pre} pre-trigger, {n_post} post-trigger)")
 
     return
 
@@ -95,9 +126,8 @@ if __name__ == '__main__':
     # Typical use on a Linux box:
     # $ python3 jm_ads131m04_monitor.py
     import argparse
-    defaultFileName = time.strftime('%Y%m%d-%H%M%S-diff-spectrometer.dat')
-    parser = argparse.ArgumentParser(description="Differential spectrometer 3-boards",
-                                     epilog='Once started, use KeyboardInterrupt (Ctrl-C) to stop.')
+    defaultFileName = time.strftime('%Y%m%d-%H%M%S-trig-test.dat')
+    parser = argparse.ArgumentParser(description="Jeremy's ADS131M04 trigger test")
     parser.add_argument('-p', '--port', dest='port', help='name for serial port')
     parser.add_argument('-i', '--identity', dest='identity', help='single-character identity')
     parser.add_argument('-f', '--file-name', metavar='fileName',
