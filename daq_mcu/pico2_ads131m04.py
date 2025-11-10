@@ -63,9 +63,9 @@ class PICO2_ADS131M04_DAQ(object):
         # Set number of samples in record after trigger event
         return self._set_register(2, n_samples)
     
-    def set_trigger_mode(self, mode):
+    def set_trigger_mode(self, mode=2):
         # Set trigger mode: 0=immediate, 1=internal, 2=external (default)
-        return self._set_register(2, mode)
+        return self._set_register(3, mode)
     
     def set_trigger_channel(self, channel):
         # Set trigger channel for internal trigger (0-3)
@@ -110,6 +110,9 @@ class PICO2_ADS131M04_DAQ(object):
     
     def disable_LED(self):
         return self.comms_MCU.command_DAQ_MCU('L,0')
+    
+    def release_pico2_event(self):
+        return self.comms_MCU.command_DAQ_MCU('z')
 
 if __name__ == '__main__':
     # Basic test: python3 pico2_ads131m04.py -p /dev/ttyUSB0 -i 1

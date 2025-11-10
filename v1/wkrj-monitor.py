@@ -1,10 +1,10 @@
 # usq_monitor.py
 # Monitor the ADC channel values on each of two boards, nodes '8' and '9'.
 # PJ 2024-11-15
-#
+# JM 2025-11-10 added to the repo "as is" from the Weston K Ramjet project
 
 from rs485_edaq import *
-
+VREF = '2v500'  # analog reference voltage
 def main(sp, node_ids):
     nboards = len(node_ids)
     nodes = [EDAQSNode(node_ids[j], sp) for j in range(nboards)]
@@ -25,14 +25,18 @@ def main(sp, node_ids):
         print(daq_mcu.get_AVR_version())
     #
     # The following lines are specifically for Jeremy's wiring arrangement.
-    daq_mcus[0].set_AVR_analog_channels([('AIN4','GND'),('AIN0','GND'),('AIN1','GND'),
-                                         ('AIN2','GND'),('AIN3','GND'),('AIN7','GND')])
-    daq_mcus[1].set_AVR_analog_channels([('AIN4','GND'),('AIN0','GND'),('AIN6','GND'),
-                                         ('AIN2','GND'),('AIN3','GND'),('AIN7','GND')])
+    daq_mcus[0].set_AVR_analog_channels([('AIN0','GND'),('AIN1','GND'),('AIN2','GND'),
+                                         ('AIN3','GND'), ('AIN4','GND'), ('AIN5','GND')])
+    daq_mcus[1].set_AVR_analog_channels([('AIN0','GND'),('AIN1','GND'),('AIN2','GND'),
+                                         ('AIN3','GND'),('AIN4','GND'),('AIN5','GND')])
+    
+    daq_mcus[0].set_AVR_analog_ref_voltage('VDD')
+    daq_mcus[1].set_AVR_analog_ref_voltage(VREF)
     for daq_mcu in daq_mcus:
-        daq_mcu.set_AVR_analog_ref_voltage('4v096')
+        #daq_mcu.set_AVR_analog_ref_voltage('2v500')
+        daq_mcu.set_AVR_single_sided_conversion()
         daq_mcu.clear_AVR_PGA()
-        daq_mcu.set_AVR_burst(0)
+        daq_mcu.set_AVR_burst(1)
     #
     print("Press Control-C to finish.")
     try:
@@ -54,13 +58,14 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--port', dest='port', help='name for serial port')
     parser.add_argument('-i', '--identity', dest='identity', help='single-character identity')
     args = parser.parse_args()
-    port_name = '/dev/ttyUSB0'
+    port_name = 'COM3'
     if args.port: port_name = args.port
     # The following list of node identities needs to match your arrangement of boards.
-    node_ids = ['8', '9']
+    node_ids = ['8', 'A']
     sp = openPort(port_name)
     if sp:
         main(sp, node_ids)
+        sp.close()
     else:
         print("Did not find the serial port.")
     print("Done.")

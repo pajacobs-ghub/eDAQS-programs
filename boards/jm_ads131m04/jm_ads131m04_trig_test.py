@@ -27,14 +27,18 @@ def main(sp, node_id, fileName):
     time.sleep(1.6)
     print(daq.get_version())
 
+
     # Configure ADS131M04
     print(daq.set_clk(8192))  # Set clock to 8192 kHz
+    daq.release_pico2_event() # Make sure Pico2-EVENT# line is released if not already
     daq.set_osr(1024) # Default OSR
     daq.set_trigger_mode(2)  # External trigger
-    daq.set_num_samples(24)  # 24 samples per channel
-    print("DAQ_MCU ready: ".format(node.test_DAQ_MCU_is_ready()))
+    #daq.set_trigger_mode(0)  # immediate trigger for testing
+    daq.set_num_samples(128)  # 24 samples per channel
+    print("DAQ_MCU ready: ", node.test_DAQ_MCU_is_ready())
+    time.sleep(0.1)
 
-    # Make sure that PIC has not been asked to hold EVENT# low.
+    # Make sure that PIC has not been asked to hold SYS-EVENT# low.
     node.release_event_line()
     node.disable_external_trigger()
     #
@@ -44,13 +48,18 @@ def main(sp, node_id, fileName):
     node.set_LED(1)
     while not node.test_event_has_passed():
         print("Waiting...")
+        print(node.debug_COMMS())
         print(node.command_COMMS_MCU('a'))
         print(node.command_COMMS_MCU('Q'))
         time.sleep(1.0)
     print("After trigger, result of Q command:", node.command_COMMS_MCU('Q'))
+    print(node.debug_COMMS())
     node.disable_external_trigger()
+    print(daq.error_flags())
     node.set_LED(0)
+
     return
+
 
     
 

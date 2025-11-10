@@ -107,6 +107,10 @@ class PIC18F16Q41_JM_ADS131M04_COMMS(object):
             raise RuntimeError(f'DAQ_MCU error: {t}')
         # Fallback: return as-is
         return t
+    
+    def debug_COMMS(self):
+        # Debug: Query CLC and comparator states
+        return self.rs485_node.command('D')
 
 
 if __name__ == '__main__':
