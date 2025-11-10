@@ -10,10 +10,11 @@ import os
 from comms_mcu import rs485
 from comms_mcu.pic18f16q41_jm_ads131m04_comms import PIC18F16Q41_JM_ADS131M04_COMMS
 from daq_mcu.pico2_ads131m04 import PICO2_ADS131M04_DAQ
+from jm_ads131m04_plot import plot_channels
 import struct
 
-NSAMPLES = 1024  # number of samples to fetch after the trigger
-NPRETRIGGER = 256  # number of samples to fetch before the trigger
+NSAMPLES = 512  # number of samples to fetch after the trigger
+NPRETRIGGER = 128  # number of samples to fetch before the trigger
 
 def main(sp, node_id, fileName):
     print("\n =====================================")
@@ -114,6 +115,11 @@ def main(sp, node_id, fileName):
     print(f"Data saved to {fileName}")
     print(f"Metadata saved to {metadata_file}")
     print(f"Total samples: {total_samples} ({n_pre} pre-trigger, {n_post} post-trigger)")
+
+    # Plot the data
+    print("\nGenerating plot...")
+    plot_filename = fileName.replace('.dat', '.png')
+    plot_channels(result, show=True, save_filename=plot_filename)
 
     return
 
