@@ -108,7 +108,7 @@ class PIC18F26Q71_COMMS_3_MCU(object):
             raise RuntimeError('Could not set internal trigger.')
         return
 
-    def disable_trigger(self):
+    def disable_hardware_trigger(self):
         txt = self.rs485_node.command(f'd')
         return
 
