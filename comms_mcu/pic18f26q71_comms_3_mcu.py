@@ -2,6 +2,7 @@
 #
 # Peter J.
 # 2025-11-09: Adapted from pic18f16q41_comms_1.py.
+# 2025-11-12: Change LED functions to using utility-pin messages.
 #
 import argparse
 import time
@@ -22,36 +23,59 @@ class PIC18F26Q71_COMMS_3_MCU(object):
         self.rs485_node = rs485.Node(id_char, serial_port)
         return
 
-    def get_version(self):
-        return self.rs485_node.command('v')
+    def command_COMMS_MCU(self, cmd_txt):
+        return self.rs485_node.command(cmd_txt)
 
-    def set_LED(self, val):
-        txt = self.rs485_node.command(f'L{val}')
-        return
+    def get_version(self):
+        return self.command_COMMS_MCU('v')
+
+    def utility_pins_read_PORT(self):
+        txt = self.command_COMMS_MCU(f'u P')
+        return int(txt)
+
+    def utility_pins_write_TRIS(self, val):
+        txt = self.command_COMMS_MCU(f'u T {val}')
+        return txt
+
+    def utility_pins_write_LAT(self, val):
+        txt = self.command_COMMS_MCU(f'u L {val}')
+        return txt
+
+    def utility_pins_write_ODC(self, val):
+        txt = self.command_COMMS_MCU(f'u O {val}')
+        return txt
+
+    def utility_pins_write_WPU(self, val):
+        txt = self.command_COMMS_MCU(f'u W {val}')
+        return txt
+
+    def analog_read(self, pin):
+        txt = self.command_COMMS_MCU(f'a {pin}')
+        return txt
 
     def assert_event_line_low(self):
-        txt = self.rs485_node.command('t')
+        txt = self.command_COMMS_MCU('t')
         return
 
     def release_event_line(self):
-        txt = self.rs485_node.command('z')
+        txt = self.command_COMMS_MCU('z')
         return
 
     def reset_DAQ_MCU(self):
-        txt = self.rs485_node.command('R')
+        txt = self.command_COMMS_MCU('R')
         return
 
     def flush_rx2_buffer(self):
-        txt = self.rs485_node.command('F')
+        txt = self.command_COMMS_MCU('F')
         return
 
     def test_DAQ_MCU_is_ready(self):
-        txt = self.rs485_node.command('Q')
+        txt = self.command_COMMS_MCU('Q')
         event_txt, ready_txt = txt.split()
         return ready_txt == '1'
 
     def test_event_has_passed(self):
-        txt = self.rs485_node.command('Q')
+        txt = self.command_COMMS_MCU('Q')
         event_txt, ready_txt = txt.split()
         return event_txt == '0'
 
@@ -76,7 +100,7 @@ class PIC18F26Q71_COMMS_3_MCU(object):
         options = {'positive': 1, 'pos':1, '1':1, 1:1,
                    'negative':0, 'neg':0, '0':0, 0:0}
         slope = options[slope]
-        txt = self.rs485_node.command(f'e {level} {slope}')
+        txt = self.command_COMMS_MCU(f'e {level} {slope}')
         if txt.find('error') >= 0:
             raise RuntimeError('Could not set external trigger.')
         return
@@ -103,17 +127,14 @@ class PIC18F26Q71_COMMS_3_MCU(object):
         options = {'positive': 1, 'pos':1, '1':1, 1:1,
                    'negative':0, 'neg':0, '0':0, 0:0}
         slope = options[slope]
-        txt = self.rs485_node.command(f'i {level} {slope}')
+        txt = self.command_COMMS_MCU(f'i {level} {slope}')
         if txt.find('error') >= 0:
             raise RuntimeError('Could not set internal trigger.')
         return
 
     def disable_hardware_trigger(self):
-        txt = self.rs485_node.command(f'd')
+        txt = self.command_COMMS_MCU('d')
         return
-
-    def command_COMMS_MCU(self, cmd_txt):
-        return self.rs485_node.command(cmd_txt)
 
     def command_DAQ_MCU(self, cmd_txt):
         '''
@@ -123,7 +144,7 @@ class PIC18F26Q71_COMMS_3_MCU(object):
         All interaction with the DAQ-MCU is via these messages
         to the COMMS-MCU.
         '''
-        txt = self.rs485_node.command('X%s' % cmd_txt)
+        txt = self.command_COMMS_MCU('X%s' % cmd_txt)
         if txt.find('ok') >= 0:
             txt = re.sub('ok', '', txt, count=1).strip()
         else:
@@ -149,7 +170,8 @@ if __name__ == '__main__':
         node1 = PIC18F26Q71_COMMS_3_MCU(node_id, sp)
         print("Just some fiddling around to see that board is alive.")
         # We assume that a LED is attached to RA6
-        node1.set_LED(1)
+        node1.utility_pins_write_TRIS(7) # RA6 as output; others input
+        node1.utility_pins_write_LAT(8) # set RA6 high to turn LED on
         print(node1.get_version())
         # If we have been reprogramming the DAQ_MCU while the COMMS_MCU is running,
         # we will likely have rubbish characters in its RX2 buffer.
@@ -160,7 +182,7 @@ if __name__ == '__main__':
         node1.flush_rx2_buffer()
         print(node1.command_DAQ_MCU('v'))
         time.sleep(1.0)
-        node1.set_LED(0)
+        node1.utility_pins_write_LAT(0) # turn LED off
     else:
         print("Did not find the serial port.")
     print("Done.")
