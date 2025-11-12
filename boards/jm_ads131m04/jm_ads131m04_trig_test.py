@@ -13,8 +13,8 @@ from daq_mcu.pico2_ads131m04 import PICO2_ADS131M04_DAQ
 from jm_ads131m04_plot import plot_channels
 import struct
 
-NSAMPLES = 512  # number of samples to fetch after the trigger
-NPRETRIGGER = 128  # number of samples to fetch before the trigger
+NSAMPLES = 4092  # number of samples to fetch after the trigger
+NPRETRIGGER = 256  # number of samples to fetch before the trigger
 
 def main(sp, node_id, fileName):
     print("\n =====================================")

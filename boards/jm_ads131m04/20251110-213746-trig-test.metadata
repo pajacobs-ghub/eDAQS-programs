@@ -1,8 +1,0 @@
-nsamples_total: 2560
-nchan: 4
-nsamples_before_trigger: 512
-nsamples_after_trigger: 2048
-trigger_index: 14774
-trigger_mode: external
-dt_us: 250.0
-index_of_oldest_data: 439
