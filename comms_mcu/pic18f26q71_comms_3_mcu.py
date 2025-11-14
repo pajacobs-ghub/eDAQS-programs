@@ -33,6 +33,10 @@ class PIC18F26Q71_COMMS_3_MCU(object):
         txt = self.command_COMMS_MCU(f'u P')
         return int(txt)
 
+    def utility_pins_write_ANSEL(self, val):
+        txt = self.command_COMMS_MCU(f'u A {val}')
+        return txt
+
     def utility_pins_write_TRIS(self, val):
         txt = self.command_COMMS_MCU(f'u T {val}')
         return txt
@@ -170,6 +174,12 @@ if __name__ == '__main__':
         node1 = PIC18F26Q71_COMMS_3_MCU(node_id, sp)
         print("Just some fiddling around to see that board is alive.")
         # We assume that a LED is attached to RA6
+        # bits                                      decimal
+        #    7    6    5    4    3    2    1    0    value
+        #    X    X    X    X  RA6  RA5  RA4  RA2
+        #    0    0    0    0    0    1    1    1  ==  7
+        #    0    0    0    0    1    0    0    0  ==  8
+        node1.utility_pins_write_ANSEL(7) # RA6 as digital; others analog
         node1.utility_pins_write_TRIS(7) # RA6 as output; others input
         node1.utility_pins_write_LAT(8) # set RA6 high to turn LED on
         print(node1.get_version())
