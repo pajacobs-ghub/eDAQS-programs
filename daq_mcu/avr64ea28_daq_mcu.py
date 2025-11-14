@@ -152,7 +152,7 @@ class AVR64EA28_DAQ_MCU(object):
 
     def get_reg(self, i):
         '''
-        Returns the value of the i-th pseudo-register.
+        Returns the value of the i-th virtual-register.
         '''
         n_reg_actual = self.get_n_reg_actual()
         if i >= n_reg_actual:
@@ -162,7 +162,7 @@ class AVR64EA28_DAQ_MCU(object):
 
     def set_reg(self, i, val):
         '''
-        Sets the value of the i-th pseudo-register and
+        Sets the value of the i-th virtual-register and
         returns the value reported.
         '''
         n_reg_actual = self.get_n_reg_actual()
@@ -332,7 +332,7 @@ class AVR64EA28_DAQ_MCU(object):
         Recording will start immediately that the MCU is told to start sampling
         and will continue indefinitely, until the specified channel crosses
         the specified level.
-        nsamples with then be recorded and the sampling stops after than.
+        nsamples with then be recorded and the sampling stops.
         '''
         # [TODO] some checking for reasonable input.
         self.set_reg(3, self.trigger_modes['INTERNAL'])
@@ -347,7 +347,7 @@ class AVR64EA28_DAQ_MCU(object):
 
         Recording will start immediately that the MCU is told to start sampling
         and will continue indefinitely, until the EVENT# pin goes low.
-        nsamples with then be recorded and the sampling stops after than.
+        nsamples with then be recorded and the sampling stops.
         '''
         self.set_reg(3, self.trigger_modes['EXTERNAL'])
         return
@@ -358,7 +358,7 @@ class AVR64EA28_DAQ_MCU(object):
         '''
         # [TODO] some checking for reasonable input.
         if n < 0: n = 100 # Somewhat arbitrary.
-        # The AVR firmware is reports value as a 16-bit signed integer,
+        # The AVR firmware reports this value as a 16-bit signed integer,
         # so let's avoid setting values too large.
         if n > 32767: n = 32767
         self.set_reg(2, n)

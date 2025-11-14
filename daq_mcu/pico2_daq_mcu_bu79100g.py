@@ -1,7 +1,8 @@
 # pico2_daq_mcu_bu79100g.py
 #
 # Peter J.
-# 2025-11-09: Adapted from avr64ea28_daq_mcu.py -- not yet ready for use.
+# 2025-11-09: Adapted from avr64ea28_daq_mcu.py but not yet ready for use.
+# 2025-11-15: Clean up and put to first use.
 #
 import sys
 sys.path.append("..")
@@ -14,10 +15,9 @@ class PICO2_DAQ_MCU_BU79100G(object):
     DAC_MCU service functions for a Pico2 microcontroller driving 8 BU79100G ADCs.
     """
 
-    __slots__ = ['comms_MCU', 'n_reg', 'reg_labels', 'reg_labels_to_int',
-                 'trigger_modes', 'trigger_modes_int_to_sym',
-                 'trigger_slopes', 'trigger_slopes_int_to_sym',
-                 'us_per_tick']
+    __slots__ = ['comms_MCU',
+                 'n_reg', 'reg_labels', 'reg_labels_to_int',
+                 'trigger_modes', 'trigger_modes_int_to_sym']
 
     def __init__(self, comms_MCU):
         '''
@@ -27,48 +27,29 @@ class PICO2_DAQ_MCU_BU79100G(object):
         #
         # The following data should match the firmware programmed into the AVR.
         # A dictionary is used so that it is easy to cross-check the labels.
-        self.n_reg = 36
+        self.n_reg = 4
         self.reg_labels = {
-            0:'PER_TICKS', 1:'NCHANNELS', 2:'NSAMPLES',
-            3:'TRIG_MODE', 4:'TRIG_CHAN', 5:'TRIG_LEVEL', 6:'TRIG_SLOPE',
-            7:'PGA_FLAG', 8:'PGA_GAIN', 9:'V_REF',
-            10:'CH0+', 11:'CH0-', 12:'CH1+', 13:'CH1-', 14:'CH2+', 15:'CH2-',
-            16:'CH3+', 17:'CH3-', 18:'CH4+', 19:'CH4-', 20:'CH5+', 21:'CH5-',
-            22:'CH6+', 23:'CH6-', 24:'CH7+', 25:'CH7-', 26:'CH8+', 27:'CH8-',
-            28:'CH9+', 29:'CH9-', 30:'CH10+', 31:'CH10-', 32:'CH11+', 33:'CH11-',
-            34:'NBURST', 35: 'DIFF_CONV'
+            0:'PERIOD_US',
+            1:'NCHANNELS',
+            2:'NSAMPLES',
+            3:'TRIG_MODE'
         }
         assert self.n_reg == len(self.reg_labels), "Oops, check reg_labels."
         self.reg_labels_to_int = {
-            'PER_TICKS':0, 'NCHANNELS':1, 'NSAMPLES':2,
-            'TRIG_MODE':3, 'TRIG_CHAN':4, 'TRIG_LEVEL':5, 'TRIG_SLOPE':6,
-            'PGA_FLAG':7, 'PGA_GAIN':8, 'V_REF':9,
-            'CH0+':10, 'CH0-':11, 'CH1+':12, 'CH1-':13, 'CH2+':14, 'CH2-':15,
-            'CH3+':16, 'CH3-':17, 'CH4+':18, 'CH4-':19, 'CH5+':20, 'CH5-':21,
-            'CH6+':22, 'CH6-':23, 'CH7+':24, 'CH7-':25, 'CH8+':26, 'CH8-':27,
-            'CH9+':28, 'CH9-':29, 'CH10+':30, 'CH10-':31, 'CH11+':32, 'CH11-':33,
-            'NBURST':34, 'DIFF_CONV':35
+            'PERIOD_US':0,
+            'NCHANNELS':1,
+            'NSAMPLES':2,
+            'TRIG_MODE':3
         }
         assert self.n_reg == len(self.reg_labels_to_int), "Oops, check reg_labels_to_int."
         self.trigger_modes = {
             'IMMEDIATE':0, 0:0,
-            'INTERNAL':1, 1:1,
-            'EXTERNAL':2, 2:2
+            'WAIT_FOR_EVENTn':1, 1:1
         }
         self.trigger_modes_int_to_sym = {
             0:'IMMEDIATE',
-            1:'INTERNAL',
-            2:'EXTERNAL'
+            1:'WAIT_FOR_EVENTn'
         }
-        self.trigger_slopes = {
-            'NEG':0, 'BELOW':0, 0:0,
-            'POS':1, 'ABOVE':1, 1:1
-        }
-        self.trigger_slopes_int_to_sym = {
-            0:'NEG',
-            1:'POS'
-        }
-        self.us_per_tick = 0.8 # Hardware timer set at this value.
         return
 
     def get_version(self):
@@ -76,7 +57,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
 
     def get_n_reg_actual(self):
         '''
-        Get the actual number of virtual registers in the AVR MCU.
+        Get the actual number of virtual registers in the Pico2 DAQ MCU.
         This may be differ with firmware version.
         '''
         txt = self.comms_MCU.command_DAQ_MCU('n')
@@ -84,7 +65,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
 
     def get_reg(self, i):
         '''
-        Returns the value of the i-th pseudo-register.
+        Returns the value of the i-th vertual-register.
         '''
         n_reg_actual = self.get_n_reg_actual()
         if i >= n_reg_actual:
@@ -94,7 +75,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
 
     def set_reg(self, i, val):
         '''
-        Sets the value of the i-th pseudo-register and
+        Sets the value of the i-th virtual-register and
         returns the value reported.
         '''
         n_reg_actual = self.get_n_reg_actual()
@@ -109,7 +90,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
 
     def set_regs_from_dict(self, d):
         '''
-        Set a number of AVR registers from values in a dictionary.
+        Set a number of Pico2 virtual registers from values in a dictionary.
 
         This should be convenient form for defining configurations.
         '''
@@ -138,7 +119,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
         Sets the AVR ticks register to (approximately) achieve
         the sample period in microseconds.
         '''
-        ticks = int(dt_us / self.us_per_tick)
+        ticks = int(dt_us)
         # [TODO] should put some checks on this.
         self.set_reg(0, ticks)
         return
@@ -147,99 +128,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
         '''
         Returns sample period in microseconds.
         '''
-        return self.get_reg(0) * self.us_per_tick
-
-    def set_analog_channels(self, chan_list):
-        '''
-        Set the channel registers from a list of input-pin tuples.
-
-        Each tuple names the positive and negative inputs.
-        '''
-        self.channels = []
-        for pos,neg in chan_list:
-            if len(self.channels) == 12: break
-            if type(pos) is str: pos = pos.upper()
-            if type(neg) is str: neg = neg.upper()
-            self.channels.append((self.pins[pos], self.pins[neg]))
-        nchan = len(self.channels)
-        self.set_reg(1, nchan)
-        for i in range(nchan):
-            self.set_reg(10+i*2, self.channels[i][0])
-            self.set_reg(11+i*2, self.channels[i][1])
-        return
-
-    def set_PGA(self, gain='8X'):
-        '''
-        '''
-        self.set_reg(7, 1) # via PGA
-        self.set_reg(8, self.pga_gains[gain])
-        return
-
-    def clear_PGA(self):
-        '''
-        '''
-        self.set_reg(7, 0) # direct
-        self.set_reg(8, 0) # 1X
-        return
-
-    def get_analog_gain(self):
-        '''
-        '''
-        pga_flag = self.get_reg(7)
-        if pga_flag == 0:
-            return 1
-        elif pga_flag == 1:
-            return self.pga_gains_int_to_value[self.get_reg(8)]
-
-    def set_analog_ref_voltage(self, vStr):
-        '''
-        Select the reference voltage from a symbolic name.
-        'VDD', '1v024', '2v048', '4v096', or '2v500'
-        '''
-        refVsel = self.ref_voltages['4v096']
-        try:
-            refVsel = self.ref_voltages[vStr]
-        except:
-            refVsel = self.ref_voltages['4v096']
-        self.set_reg(9, refVsel)
-        return
-
-    def get_burst_samples(self):
-        return 2**self.get_AVR_reg(34)
-
-    def set_burst(self, n):
-        '''
-        The number of samples per conversion is 2**n.
-
-        Note that when setting this number nonzero,
-        we will get conversion results that are 16 times
-        the nominal 12-bit value because we have elected
-        to use burst-mode with result scaling.
-        '''
-        log2n = 0
-        try:
-            log2n = self.sample_accumulation_number[n]
-        except:
-            log2n = 0
-        self.set_reg(34, log2n)
-        return
-
-    def get_analog_ref_voltage(self):
-        '''
-        '''
-        return self.ref_voltages_int_to_value[self.get_reg(9)]
-
-    def set_differential_conversion(self):
-        '''
-        '''
-        self.set_reg(35, 1)
-        return
-
-    def set_single_sided_conversion(self):
-        '''
-        '''
-        self.set_reg(35, 0)
-        return
+        return self.get_reg(0)
 
     def immediate_sample_set(self):
         '''
@@ -257,31 +146,16 @@ class PICO2_DAQ_MCU_BU79100G(object):
         self.set_reg(3, self.trigger_modes['IMMEDIATE'])
         return
 
-    def set_trigger_internal(self, chan, level, slope):
+    def set_trigger_wait_for_eventn(self):
         '''
-        Set the trigger mode to INTERNAL.
+        Set the trigger mode to WAIT_FOR_EVENTn.
 
         Recording will start immediately that the MCU is told to start sampling
-        and will continue indefinitely, until the specified channel crosses
-        the specified level.
-        nsamples with then be recorded and the sampling stops after than.
+        and will continue indefinitely, until the EVENTn line goes low.
+        nsamples with then be recorded and the sampling stops after.
         '''
         # [TODO] some checking for reasonable input.
-        self.set_reg(3, self.trigger_modes['INTERNAL'])
-        self.set_reg(4, chan)
-        self.set_reg(5, level)
-        self.set_reg(6, self.trigger_slopes[slope])
-        return
-
-    def set_trigger_external(self):
-        '''
-        Set the trigger mode to EXTERNAL.
-
-        Recording will start immediately that the MCU is told to start sampling
-        and will continue indefinitely, until the EVENT# pin goes low.
-        nsamples with then be recorded and the sampling stops after than.
-        '''
-        self.set_reg(3, self.trigger_modes['EXTERNAL'])
+        self.set_reg(3, self.trigger_modes['WAIT_FOR_EVENTn'])
         return
 
     def set_nsamples(self, n):
@@ -290,15 +164,14 @@ class PICO2_DAQ_MCU_BU79100G(object):
         '''
         # [TODO] some checking for reasonable input.
         if n < 0: n = 100 # Somewhat arbitrary.
-        # The AVR firmware is reports value as a 16-bit signed integer,
-        # so let's avoid setting values too large.
-        if n > 32767: n = 32767
+        # The Pico2 retains only 16k sample sets.
+        if n > 32768: n = 32768
         self.set_reg(2, n)
         return
 
     def start_sampling(self):
         '''
-        Start the AVR sampling.
+        Start the Pico2 sampling.
 
         What happens from this point depends on the register settings
         and, maybe, the external signals.
@@ -312,7 +185,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
         was always maintained.
 
         It takes only one late arrival at the end of the sampling loop to
-        indicate that the AVR did not kep up during sampling.
+        indicate that the Pico2 did not kep up during sampling.
         '''
         return (int(self.comms_MCU.command_DAQ_MCU('k')) == 1)
 
@@ -555,46 +428,47 @@ class PICO2_DAQ_MCU_BU79100G(object):
 if __name__ == '__main__':
     # A basic test to see if the eDAQS node is attached and awake.
     # Assuming that you have node '2', typical use on a Linux box:
-    # $ python3 avr64ea28_daq_mcu.py -i 2
-    import argparse
+    # $ python3 pic18f26q71_comms_3_mcu.py -i 2
     import time
+    import argparse
     parser = argparse.ArgumentParser(description="eDAQS node test program")
     parser.add_argument('-p', '--port', dest='port', help='name for serial port')
     parser.add_argument('-i', '--identity', dest='identity', help='single-character identity')
     args = parser.parse_args()
     port_name = '/dev/ttyUSB0'
     if args.port: port_name = args.port
-    node_id = '1'
+    node_id = 'E'
     if args.identity: node_id = args.identity
     sp = rs485.openPort(port_name)
     if sp:
-        node1 = PIC18F16Q41_COMMS_1_MCU(node_id, sp)
+        node1 = PIC18F26Q71_COMMS_3_MCU(node_id, sp)
         print("Just some fiddling around to see that board is alive.")
-        node1.set_LED(1)
+        # We assume that a LED is attached to RA6
+        # bits                                      decimal
+        #    7    6    5    4    3    2    1    0    value
+        #    X    X    X    X  RA6  RA5  RA4  RA2
+        #    0    0    0    0    0    1    1    1  ==  7
+        #    0    0    0    0    1    0    0    0  ==  8
+        node1.utility_pins_write_ANSEL(7) # RA6 as digital; others analog
+        node1.utility_pins_write_TRIS(7) # RA6 as output; others input
+        node1.utility_pins_write_LAT(8) # set RA6 high to turn LED on
         print(node1.get_version())
-        # If we have been reprogramming the DAQ_MCU while the PIC18 is running,
-        # we will likely have rubbish characters in the PIC18's RX2 buffer.
+        # If we have been reprogramming the DAQ_MCU while the COMMS_MCU is running,
+        # we will likely have rubbish characters in its RX2 buffer.
         if not node1.test_DAQ_MCU_is_ready():
             print("Reset DAQ_MCU")
             node1.reset_DAQ_MCU()
             time.sleep(2.0)
         node1.flush_rx2_buffer()
-        daq_mcu = AVR64EA28_DAQ_MCU(node1)
+        daq_mcu = PICO2_DAQ_MCU_BU79100G(node1)
         print(daq_mcu.get_version())
-        print("size of SRAM (bytes)=", daq_mcu.get_size_of_SRAM_in_bytes())
-        print(daq_mcu.get_reg(0))
-        print(daq_mcu.set_reg(0, 250))
-        print(daq_mcu.get_reg(0))
         daq_mcu.set_regs_to_factory_values()
-        daq_mcu.set_regs_from_dict({1:6, 2:100})
         print(daq_mcu.get_reg_values_as_text())
+        print("Report a few individual samples.")
+        for i in range(5):
+            print(daq_mcu.immediate_sample_set())
         time.sleep(1.0)
-        node1.set_LED(0)
-        for i in range(2):
-            time.sleep(0.5)
-            node1.set_LED(1)
-            time.sleep(0.5)
-            node1.set_LED(0)
+        node1.utility_pins_write_LAT(0) # turn LED off
     else:
         print("Did not find the serial port.")
     print("Done.")
