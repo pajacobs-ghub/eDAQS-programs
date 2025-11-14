@@ -1,7 +1,7 @@
-# test_1_external_trigger.py
-# Exercises just the PIC18F26Q71 response via its comparator.
-# Need to provide an analog voltage on the ext-trig input.
-# PJ 2025-11-10, 2025-11-15
+# test_1_internal_trigger.py
+# Exercises just the PIC18F26Q71 response via its comparator 2.
+# Need to provide an analog voltage on the cnannel 0 input.
+# PJ 2025-11-15
 
 import sys
 sys.path.append("../..")
@@ -12,7 +12,7 @@ from comms_mcu.pic18f26q71_comms_3_mcu import PIC18F26Q71_COMMS_3_MCU
 def main(sp, node_id):
     node1 = PIC18F26Q71_COMMS_3_MCU(node_id, sp)
     #
-    print("Test the external-trigger input on PIC.")
+    print("Test the internal-trigger input on PIC.")
     print(node1.get_version())
     # Have put in the Pico2 reset so that previous testing
     # that involved recording and the Pico2 pulling active-low EVENT#
@@ -24,7 +24,7 @@ def main(sp, node_id):
     node1.release_event_line()
     #
     print("Before enabling trigger, result of Q command:", node1.command_COMMS_MCU('Q'))
-    node1.enable_external_trigger(64, 'pos')
+    node1.enable_internal_trigger(64, 'pos')
     while not node1.test_event_has_passed():
         print("Waiting...")
         time.sleep(1.0)
@@ -34,7 +34,7 @@ def main(sp, node_id):
 
 if __name__ == '__main__':
     # Typical use on a Linux box:
-    # $ python3 test_1_external_trigger.py -i E
+    # $ python3 test_6_internal_trigger.py -i E
     import argparse
     parser = argparse.ArgumentParser(description="eDAQS node test program")
     parser.add_argument('-p', '--port', dest='port', help='name for serial port')

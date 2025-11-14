@@ -12,6 +12,9 @@ import sys
 sys.path.append("..")
 from comms_mcu import rs485
 
+trigger_options = {'positive': 1, 'pos':1, '1':1, 1:1,
+                   'negative':0, 'neg':0, '0':0, 0:0}
+
 class PIC18F26Q71_COMMS_3_MCU(object):
     """
     COMMS-MCU service functions are built on RS485 messages.
@@ -101,9 +104,7 @@ class PIC18F26Q71_COMMS_3_MCU(object):
         level = int(level)
         if level < 0: level = 0
         if level > 255: level = 255
-        options = {'positive': 1, 'pos':1, '1':1, 1:1,
-                   'negative':0, 'neg':0, '0':0, 0:0}
-        slope = options[slope]
+        slope = trigger_options[slope]
         txt = self.command_COMMS_MCU(f'e {level} {slope}')
         if txt.find('error') >= 0:
             raise RuntimeError('Could not set external trigger.')
@@ -128,9 +129,7 @@ class PIC18F26Q71_COMMS_3_MCU(object):
         level = int(level)
         if level < 0: level = 0
         if level > 255: level = 255
-        options = {'positive': 1, 'pos':1, '1':1, 1:1,
-                   'negative':0, 'neg':0, '0':0, 0:0}
-        slope = options[slope]
+        slope = trigger_options[slope]
         txt = self.command_COMMS_MCU(f'i {level} {slope}')
         if txt.find('error') >= 0:
             raise RuntimeError('Could not set internal trigger.')
