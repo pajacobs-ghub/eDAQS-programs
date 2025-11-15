@@ -606,7 +606,10 @@ class AVR64EA28_DAQ_MCU(object):
         for i in range(nsamples_select):
             # Unwrap the stored data so that the oldest data is at sample[0].
             addr = byte_addr_of_oldest_data + bpss * (i + first_sample_index)
-            if addr >= nbytes: addr -= nbytes
+            # Wrap to keep addr within the block of bytes, if necessary.
+            # Note that sample sets should fit neatly within the byte array,
+            # so we should only need to check the starting point for unpacking.
+            while addr >= nbytes: addr -= nbytes
             items = s.unpack_from(data['data'], offset=addr)
             for j in range(nchan): _samples[j].append(items[j])
         return {'nchan':nchan,

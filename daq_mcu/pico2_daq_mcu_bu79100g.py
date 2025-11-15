@@ -136,6 +136,12 @@ class PICO2_DAQ_MCU_BU79100G(object):
         txt = self.comms_MCU.command_DAQ_MCU('I')
         return txt
 
+    def get_trigger_mode(self):
+        '''
+        Returns the integer value representing the trigger mode.
+        '''
+        return self.get_reg(3)
+
     def set_trigger_immediate(self):
         '''
         Set the trigger mode to IMMEDIATE.
@@ -248,12 +254,6 @@ class PICO2_DAQ_MCU_BU79100G(object):
         Note that this number should be treated as an unsigned integer.
         '''
         return self.get_reg(2)
-
-    def get_trigger_mode(self):
-        '''
-        Returns the integer value representing the trigger mode.
-        '''
-        return self.get_reg(3)
 
     def get_formatted_sample(self, i):
         '''
@@ -405,13 +405,16 @@ class PICO2_DAQ_MCU_BU79100G(object):
         byte_addr_of_oldest_data = data['byte_addr_of_oldest_data']
         nsamples_select = data['nsamples_select']
         first_sample_index = data['first_sample_index']
-        # Note that the integers are stored in the SRAM chip in big-endian format.
+        # Note that the integers are sent from the Pico2 in big-endian format.
         s = struct.Struct(f'>{nchan}h')
         _samples = [[] for c in range(nchan)]
         for i in range(nsamples_select):
             # Unwrap the stored data so that the oldest data is at sample[0].
             addr = byte_addr_of_oldest_data + bpss * (i + first_sample_index)
-            if addr >= nbytes: addr -= nbytes
+            # Wrap to keep addr within the block of bytes, if necessary.
+            # Note that sample sets should fit neatly within the byte array,
+            # so we should only need to check the starting point for unpacking.
+            while addr >= nbytes: addr -= nbytes
             items = s.unpack_from(data['data'], offset=addr)
             for j in range(nchan): _samples[j].append(items[j])
         return {'nchan':nchan,
