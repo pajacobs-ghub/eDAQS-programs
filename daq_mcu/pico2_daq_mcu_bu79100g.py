@@ -370,8 +370,8 @@ class PICO2_DAQ_MCU_BU79100G(object):
         mode = self.get_trigger_mode()
         dt_us = self.get_sample_period_us()
         late_flag = self.did_not_keep_up_during_sampling()
-        analog_gain = self.get_analog_gain()
-        ref_voltage = self.get_analog_ref_voltage()
+        analog_gain = 1.0 # No choice for the BU79100G.
+        ref_voltage = 3.3 # Set by choice of resistors for the TL431.
         return {'total_bytes':total_bytes,
                 'total_pages':total_pages,
                 'bytes_per_sample_set':bytes_per_sample_set,
