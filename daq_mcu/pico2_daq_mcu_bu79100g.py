@@ -207,7 +207,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
         '''
         Returns the number of sample sets that can be stored in SRAM.
 
-        This value is dependent on the total amount of SRAM installed
+        This value is dependent on the amount of SRAM assigned to data storage
         and the number of channels being recorded.
         '''
         return int(self.comms_MCU.command_DAQ_MCU('m'))
@@ -260,7 +260,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
         Returns the values of the recorded sample set i,
         where i is counted from the oldest recorded sample (i=0).
 
-        The AVR reports these values as a string of space-separated integers.
+        The Pico2 reports these values as a string of space-separated integers.
         '''
         return [int(item) for item in self.comms_MCU.command_DAQ_MCU(f'P {i}').split()]
 
@@ -273,7 +273,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
         Returns a list of lists containing the recorded values for each channel.
 
         This is a fairly slow way to get the full set of recorded samples
-        because the AVR is doing all of the house-keeping and returning the
+        because the Pico2 is doing all of the house-keeping and returning the
         sampled values as text strings.
         It may be faster to fetch the SRAM data in and then unpack the
         sample values on the PC.
