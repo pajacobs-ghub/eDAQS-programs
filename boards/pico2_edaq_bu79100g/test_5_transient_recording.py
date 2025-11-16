@@ -2,7 +2,7 @@
 # Make a short recording with a wait-for-event trigger,
 # then fetch the whole blob of memory and unpack the samples.
 # We have a 1kHz sine wave on channels 0 and 1.
-# PJ 2025-11-15
+# PJ 2025-11-15, 2025-11-16 1MSps demo.
 
 import sys
 sys.path.append("../..")
@@ -31,7 +31,7 @@ def main(sp, node_id):
     daq_mcu.set_regs_to_factory_values()
     #
     print("Prepare to make a recording.")
-    daq_mcu.set_sample_period_us(10)
+    daq_mcu.set_sample_period_us(1)
     daq_mcu.set_nsamples(2000)
     daq_mcu.set_trigger_wait_for_eventn()
     print(daq_mcu.get_reg_values_as_text())
@@ -56,7 +56,7 @@ def main(sp, node_id):
     print(f"nchan={nchan}, nsamples={nsamples}, trigger_mode={mode}")
     print("About to fetch data...")
     start = time.time()
-    my_data = daq_mcu.fetch_SRAM_data(n_pretrigger=1000)
+    my_data = daq_mcu.fetch_SRAM_data(n_select=2500, n_pretrigger=500)
     # print("my_data=", my_data)
     elapsed = time.time() - start
     print(f"{elapsed:.2f} seconds to fetch {nsamples} sample sets")
