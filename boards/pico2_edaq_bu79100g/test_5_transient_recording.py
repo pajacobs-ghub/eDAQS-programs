@@ -61,6 +61,7 @@ def main(sp, node_id):
     elapsed = time.time() - start
     print(f"{elapsed:.2f} seconds to fetch {nsamples} sample sets")
     my_samples = daq_mcu.unpack_to_samples(my_data)
+    print(f"Reference voltage {my_samples['ref_voltage']}")
     #
     print("With the post-trigger samples, make a plot.")
     import matplotlib.pyplot as plt

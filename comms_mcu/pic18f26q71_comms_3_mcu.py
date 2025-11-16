@@ -60,6 +60,13 @@ class PIC18F26Q71_COMMS_3_MCU(object):
         txt = self.command_COMMS_MCU(f'a {pin}')
         return txt
 
+    def analog_millivolts(self):
+        # Conveniently, we have VA/2 plugged into ANA0,
+        # we have a 2048mV reference, and we are using
+        # a 12-bit converter, so the integer count is already in millivolts.
+        txt = self.command_COMMS_MCU('a 0')
+        return int(txt)
+
     def assert_event_line_low(self):
         txt = self.command_COMMS_MCU('t')
         return
@@ -192,6 +199,7 @@ if __name__ == '__main__':
         print(node1.command_DAQ_MCU('v'))
         time.sleep(1.0)
         node1.utility_pins_write_LAT(0) # turn LED off
+        print(f"Analog voltage {node1.analog_millivolts()}")
     else:
         print("Did not find the serial port.")
     print("Done.")

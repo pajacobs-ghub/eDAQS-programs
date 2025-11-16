@@ -136,6 +136,13 @@ class PICO2_DAQ_MCU_BU79100G(object):
         txt = self.comms_MCU.command_DAQ_MCU('I')
         return txt
 
+    def analog_millivolts(self):
+        '''
+        Returns the analog voltage (driving the BU79100G ADCs)
+        in millivolts, as an integer.
+        '''
+        return self.comms_MCU.analog_millivolts()
+
     def get_trigger_mode(self):
         '''
         Returns the integer value representing the trigger mode.
@@ -371,7 +378,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
         dt_us = self.get_sample_period_us()
         late_flag = self.did_not_keep_up_during_sampling()
         analog_gain = 1.0 # No choice for the BU79100G.
-        ref_voltage = 3.3 # Set by choice of resistors for the TL431.
+        ref_voltage = self.analog_millivolts()/1000
         return {'total_bytes':total_bytes,
                 'total_pages':total_pages,
                 'bytes_per_sample_set':bytes_per_sample_set,
@@ -467,6 +474,7 @@ if __name__ == '__main__':
         print(daq_mcu.get_version())
         daq_mcu.set_regs_to_factory_values()
         print(daq_mcu.get_reg_values_as_text())
+        print(f"Analog millivolts {daq_mcu.analog_millivolts()}")
         print("Report a few individual samples.")
         for i in range(5):
             print(daq_mcu.immediate_sample_set())
