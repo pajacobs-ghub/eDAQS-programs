@@ -1,4 +1,4 @@
-# test_4_transient_recording.py
+# test_5_transient_recording.py
 # Make a short recording with a wait-for-event trigger,
 # then fetch the whole blob of memory and unpack the samples.
 # We have a 1kHz sine wave on channels 0 and 1.
