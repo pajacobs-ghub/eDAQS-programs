@@ -68,7 +68,7 @@ def main(sp, node_id):
 
 if __name__ == '__main__':
     # Typical use on a Linux box:
-    # $ python3 test_6_internal_trigger.py -i E
+    # $ python3 test_4_fetch_memory.py -i E
     import argparse
     parser = argparse.ArgumentParser(description="eDAQS node test program")
     parser.add_argument('-p', '--port', dest='port', help='name for serial port')
