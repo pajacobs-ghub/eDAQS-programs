@@ -3,6 +3,7 @@
 # Peter J.
 # 2025-11-09: Adapted from avr64ea28_daq_mcu.py but not yet ready for use.
 # 2025-11-15: Clean up and put to first use.
+# 2026-01-02: Accommodate the RTDP implementation.
 #
 import sys
 sys.path.append("..")
@@ -27,19 +28,21 @@ class PICO2_DAQ_MCU_BU79100G(object):
         #
         # The following data should match the firmware programmed into the AVR.
         # A dictionary is used so that it is easy to cross-check the labels.
-        self.n_reg = 4
+        self.n_reg = 5
         self.reg_labels = {
             0:'PERIOD_US',
             1:'NCHANNELS',
             2:'NSAMPLES',
-            3:'TRIG_MODE'
+            3:'TRIG_MODE',
+            4:'RTDP_US'
         }
         assert self.n_reg == len(self.reg_labels), "Oops, check reg_labels."
         self.reg_labels_to_int = {
             'PERIOD_US':0,
             'NCHANNELS':1,
             'NSAMPLES':2,
-            'TRIG_MODE':3
+            'TRIG_MODE':3,
+            'RTDP_US': 4
         }
         assert self.n_reg == len(self.reg_labels_to_int), "Oops, check reg_labels_to_int."
         self.trigger_modes = {
@@ -116,8 +119,9 @@ class PICO2_DAQ_MCU_BU79100G(object):
 
     def set_sample_period_us(self, dt_us):
         '''
-        Sets the AVR ticks register to (approximately) achieve
-        the sample period in microseconds.
+        Sets the timer ticks register to achieve the sample period in microseconds.
+
+        On the Pico2, the general timer is used and it ticks over with a microsecond period.
         '''
         ticks = int(dt_us)
         # [TODO] should put some checks on this.
@@ -130,8 +134,25 @@ class PICO2_DAQ_MCU_BU79100G(object):
         '''
         return self.get_reg(0)
 
+    def set_RTDP_timeout_us(self, dt_us):
+        '''
+        Sets the RTDP timeout period in microseconds.
+
+        A non-zero period will activate the RTDP.
+        Note that the sample period needs to be >= 2 microseconds
+        for the RTDP to be active.
+        '''
+        ticks = int(dt_us)
+        # [TODO] should put some checks on this.
+        self.set_reg(4, ticks)
+        return
+
     def immediate_sample_set(self):
         '''
+        Starts the main sampling process, but just for two sample cycles.
+
+        Returns the data for the second cycle because the first cycle is
+        likely to produce invalid data.
         '''
         txt = self.comms_MCU.command_DAQ_MCU('I')
         return txt
