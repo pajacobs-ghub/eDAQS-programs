@@ -32,7 +32,7 @@ def main(sp, node_id):
     #
     print("Prepare to make a recording with RTDP active.")
     daq_mcu.set_sample_period_us(10)
-    daq_mcu.set_RTDP_timeout_us(100)
+    daq_mcu.set_RTDP_timeout_us(300)
     daq_mcu.set_nsamples(200)
     daq_mcu.set_trigger_wait_for_eventn()
     print(daq_mcu.get_reg_values_as_text())
