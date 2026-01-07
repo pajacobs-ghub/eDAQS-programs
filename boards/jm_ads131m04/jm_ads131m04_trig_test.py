@@ -37,6 +37,7 @@ def main(sp, node_id, fileName):
     daq.set_osr(1024) # Default OSR
     daq.set_trigger_mode(2)  # External trigger
     #daq.set_trigger_mode(0)  # immediate trigger for testing
+    daq.set_RTDP_timeout_us(500) # Activate the RTDP for testing by PJ 2026-01-07
     daq.set_num_samples(NSAMPLES)  # samples per channel
     print("DAQ_MCU ready: ", node.test_DAQ_MCU_is_ready())
     time.sleep(0.1)
@@ -46,7 +47,7 @@ def main(sp, node_id, fileName):
     node.release_event_line()
     node.disable_external_trigger()
     print("Before enabling trigger, result of Q command:", node.command_COMMS_MCU('Q'))
-    node.enable_external_trigger(200, 'pos')
+    node.enable_external_trigger(50, 'pos')
     node.set_LED(1) # Turn on LED to indicate waiting for trigger
     
     # tell the DAQ to start its sampling process
