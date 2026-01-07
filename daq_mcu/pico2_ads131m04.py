@@ -72,6 +72,21 @@ class PICO2_ADS131M04_DAQ(object):
         sample_period = (2000 * osr) / clock_rate # in microseconds
         return sample_period
 
+    def set_RTDP_timeout_us(self, dt_us):
+        '''
+        Sets the RTDP timeout period in microseconds.
+
+        A non-zero period will activate the RTDP.
+
+        Note that this period should be greater than the primary sampling period
+        that is determined by the ADS131M04 master clock frequency and
+        the requested OSR.
+        '''
+        ticks = int(dt_us)
+        # [TODO] should put some checks on this.
+        self._set_register(7, ticks)
+        return
+
     def set_num_samples(self, n_samples):
         # Set number of samples in record after trigger event
         return self._set_register(2, n_samples)
