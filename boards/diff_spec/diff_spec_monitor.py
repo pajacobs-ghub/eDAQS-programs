@@ -10,7 +10,6 @@ import time
 import os
 from comms_mcu import rs485
 from comms_mcu.pic18f16q41_spectrometer_comms import PIC18F16Q41_SPECTROMETER_COMMS
-from comms_mcu.pic18f16q41_comms_1_mcu import PIC18F16Q41_COMMS_1_MCU
 from daq_mcu.avr64ea28_spi_daq import AVR64EA28_SPI_DAQ
 import struct
 
@@ -66,6 +65,7 @@ def main(sp, node_id, fileName):
                         stamped_text += ' %d' % analog_values[j]
             f.write(stamped_text+'\n')
             print(stamped_text)
+            time.sleep(1.0) # 2026-02-09 Slow for debugging channel A9
     except KeyboardInterrupt:
         f.close()
     return
