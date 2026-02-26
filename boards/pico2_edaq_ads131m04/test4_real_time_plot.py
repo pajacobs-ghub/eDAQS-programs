@@ -1,4 +1,4 @@
-# jm_fact3_plot2_dpg.py
+# test4_real_time_plot.py
 # Real-time plotting of voltage data from the ADS131M04 and FACT3 amplifier hat.
 # This script continuously reads voltage data and plots it using DearPyGui
 # DearPyGui is much faster than matplotlib for real-time plotting
@@ -82,7 +82,7 @@ class RealtimeVoltageMonitorDPG:
                 dpg.add_plot_axis(dpg.mvYAxis, label="Voltage (V)", tag="ch3_y_axis")
                 
                 # Set y-axis limits
-                dpg.set_axis_limits("ch3_y_axis", -1.3, 1.3)
+                dpg.set_axis_limits("ch3_y_axis", -0.3, 0.3)
                 
                 # Add horizontal line at 0V
                 dpg.add_line_series([0, 10], [0, 0], label="0V Reference", 
