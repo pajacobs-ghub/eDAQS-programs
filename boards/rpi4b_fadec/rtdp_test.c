@@ -1,263 +1,374 @@
-/*
- * rtdp_test.c — 74HC165 "Data Ready" monitor on Raspberry Pi 4B
- *
- * The 74HC165 is wired as a parallel-in / serial-out shift register that
- * buffers "data ready" signals from downstream ADC channels.
- *
- * Pin mapping
- * -----------
- *   74HC165 SH/LD  →  GPIO 4   (active-low latch / "CS")
- *   74HC165 CLK    →  GPIO 11  (SPI0 SCLK)
- *   74HC165 Q7     →  GPIO 9   (SPI0 MISO)
- *
- * The byte is clocked out MSB-first (D7 first, D0 last).
- * We watch for D6 transitioning LOW → HIGH and print a timestamped message.
- *
- * Build
- * -----
- *   gcc -O2 -Wall -o rtdp_test rtdp_test.c -lgpiod
- *
- * Requires libgpiod v2.x:
- *   sudo apt install libgpiod-dev
- */
+
+// rtdp_test.c
+// Real-Time Data Port (RTDP) external master test - Raspberry Pi 4B
+//
+// Monitors DATA_RDY from the ADS131M04 DAQ board. On each rising edge, pulls
+// CS low and bit-bangs a 16-byte SPI Mode 3 read (4 x int32_t big-endian).
+// The RS-485 transceiver on the RPi side is kept in receive-only mode.
+//
+// Uses libgpiod v2 API.
+//
+// 2026-02-26 JM: Initial version
+
+// HARDWARE PIN MAPPING
+//   DRDY1  >  GPIO 2   (ADC1 DATA READY - input, rising-edge event)
+//   MISO   >  GPIO 9   (SPI0 MISO       - input, data from ADC board via RS-485)
+//   CLK    >  GPIO 11  (SPI0 SCLK       - output, idles HIGH for SPI Mode 3)
+//   CS1    >  GPIO 13  (ADC1 CS         - output, active low)
+//   DE     >  GPIO 24  (RTDP_DE  - output, HIGH = RPi RS-485 driver enabled)
+//   REN    >  GPIO 25  (RTDP_REn - output, LOW  = RS-485 receiver enabled)
+
+// BUILD COMMAND (ON Raspberry Pi 4B):
+//  gcc -O2 -Wall -o rtdp_test rtdp_test.c -lgpiod
+//  (run as root or with CAP_SYS_NICE + readable /dev/gpiomem)
+
+// REQUIREMENTS:
+//  sudo apt install libgpiod-dev
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <signal.h>
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sched.h>
+#include <sys/mman.h>
 #include <gpiod.h>
 
-/* ── GPIO assignments ─────────────────────────────────────────────────────── */
-#define GPIO_CHIP_PATH  "/dev/gpiochip0"
-#define GPIO_CLK        11u     /* SCLK  — drives the 74HC165 clock input    */
-#define GPIO_MISO       9u      /* Q7    — serial output of the 74HC165       */
-#define GPIO_SH_LD      4u      /* SH/LD — LOW latches parallel inputs        */
+// ---------------------------------------------------------------------------
+// BCM2711 (RPi 4B) direct GPIO register access via /dev/gpiomem.
+// Each operation is a single register write/read — no syscall overhead.
+// libgpiod is still used for GPIO setup and DRDY edge-event waiting.
+// ---------------------------------------------------------------------------
+#define GPIOMEM_PATH    "/dev/gpiomem"
+#define GPIO_MAP_SIZE   0x1000u
+// Register word-offsets from the GPIO peripheral base
+#define GPSET0  (0x1Cu / 4u)   // Set   GPIO 0-31
+#define GPCLR0  (0x28u / 4u)   // Clear GPIO 0-31
+#define GPLEV0  (0x34u / 4u)   // Level GPIO 0-31
 
-/* ── Bit of interest ─────────────────────────────────────────────────────── */
-#define D6_MASK         (1u << 6)   /* bit 6 of the reconstructed byte       */
+static volatile uint32_t *g_gpio = NULL;
 
-/* ── Polling interval between reads (microseconds) ──────────────────────── */
-#define POLL_INTERVAL_US   100u
+#define GPIO_SET(pin)  (g_gpio[GPSET0] = (1u << (pin)))
+#define GPIO_CLR(pin)  (g_gpio[GPCLR0] = (1u << (pin)))
+#define GPIO_GET(pin)  ((g_gpio[GPLEV0] >> (pin)) & 1u)
 
-/* ── libgpiod v2 handles ─────────────────────────────────────────────────── */
-static struct gpiod_chip            *chip;
-static struct gpiod_line_request    *request;
-static struct gpiod_line_settings   *out_settings;
-static struct gpiod_line_settings   *in_settings;
-static struct gpiod_line_config     *line_cfg;
-static struct gpiod_request_config  *req_cfg;
+// GPIO ASSIGNMENTS
+#define GPIO_CHIP_PATH      "/dev/gpiochip0"
+#define GPIO_DRDY1          2u      // ADC1 DATA READY (input, busy-polled via mmap)
+#define GPIO_MISO           9u      // SPI0 MISO (input)
+#define GPIO_CLK            11u     // SPI0 SCLK (output)
+#define GPIO_CS1            13u     // ADC1 CS, active low (output)
+#define GPIO_RTDP_DE        24u     // RS-485 Driver Enable (output)
+#define GPIO_RTDP_REn       25u     // RS-485 Receiver Enable, active low (output)
 
-static volatile sig_atomic_t running = 1;
+// SPI timing: half-period in nanoseconds.
+// Each half-cycle has ~125 ns of overhead (register ops + clock_gettime calls),
+// so 125 ns delay gives ~250 ns actual half-period = ~2 MHz, matching the
+// Pico2 SPI slave limit of 2 MHz.
+#define SPI_HALF_PERIOD_NS  125L
 
-/* ─────────────────────────────────────────────────────────────────────────── */
+// DATA_RDY busy-poll timeout: 5 seconds
+#define DRDY_TIMEOUT_S      5
 
-static void handle_sigint(int sig)
+// RTDP payload: 4 channels × 4 bytes
+#define RTDP_NUM_BYTES      16
+#define RTDP_NUM_CHANNELS   4
+
+#define CONSUMER            "rtdp_test"
+
+// ---------------------------------------------------------------------------
+
+static volatile int g_running = 1;
+
+static void sigint_handler(int sig)
 {
     (void)sig;
-    running = 0;
+    g_running = 0;
 }
 
-static inline void delay_us(unsigned int us)
+// Busy-wait delay using CLOCK_MONOTONIC (no syscall sleep, PREEMPT_RT safe).
+static inline void ns_delay(long ns)
 {
-    struct timespec ts = {
-        .tv_sec  = 0,
-        .tv_nsec = (long)us * 1000L,
-    };
-    nanosleep(&ts, NULL);
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    long target_ns = t0.tv_nsec + ns;
+    long carry     = target_ns / 1000000000L;
+    t0.tv_sec     += carry;
+    t0.tv_nsec     = target_ns - carry * 1000000000L;
+    do {
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+    } while ((t1.tv_sec < t0.tv_sec) ||
+             (t1.tv_sec == t0.tv_sec && t1.tv_nsec < t0.tv_nsec));
 }
 
-static inline void set_line(unsigned int offset, int high)
+// ---------------------------------------------------------------------------
+// SPI Mode 3 bit-bang receive (CPOL=1, CPHA=1) — direct BCM2711 register access.
+//   Clock idles HIGH. Slave shifts data on falling edge; master samples on rising edge.
+//   Uses g_gpio mmap registers: no syscalls during transfer (~1 ns per GPIO op).
+//   Reads 'len' bytes MSB-first into buf[].
+// ---------------------------------------------------------------------------
+static void spi_read_bytes(uint8_t *buf, int len)
 {
-    gpiod_line_request_set_value(request, offset,
-        high ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE);
-}
+    for (int i = 0; i < len; i++) {
+        uint8_t byte = 0;
+        for (int bit = 7; bit >= 0; bit--) {
+            // Falling edge: slave shifts new bit onto MISO
+            GPIO_CLR(GPIO_CLK);
+            ns_delay(SPI_HALF_PERIOD_NS);
 
-static inline int get_line(unsigned int offset)
-{
-    return gpiod_line_request_get_value(request, offset) == GPIOD_LINE_VALUE_ACTIVE
-           ? 1 : 0;
-}
-
-/*
- * hc165_read_byte()
- *
- * Timing diagram (SH/LD active-low load, shift on CLK rising edge):
- *
- *   SH/LD  ‾‾\_/‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
- *   CLK    ____/‾\_/‾\_/‾\_/‾\_/‾\_/‾\_/‾\_
- *   Q7     [D7] [D6] [D5] [D4] [D3] [D2] [D1] [D0]
- *
- * Q7 presents D7 immediately after SH/LD goes HIGH.
- * Each CLK rising edge shifts the next bit onto Q7.
- */
-static uint8_t hc165_read_byte(void)
-{
-    uint8_t byte = 0;
-
-    /* Pulse SH/LD LOW to latch all parallel inputs into the shift register */
-    set_line(GPIO_SH_LD, 0);
-    delay_us(1);
-    set_line(GPIO_SH_LD, 1);
-    delay_us(1);
-
-    /*
-     * Clock out 8 bits, MSB (D7) first.
-     * Read Q7 before each rising clock edge — D7 is already on Q7 after
-     * the latch pulse, and each rising edge advances the shift register
-     * so the next bit is ready for the following read.
-     */
-    for (int i = 7; i >= 0; i--) {
-        byte |= (uint8_t)(get_line(GPIO_MISO) << i);
-
-        /* Rising edge: shift register advances, next bit appears on Q7 */
-        set_line(GPIO_CLK, 1);
-        delay_us(1);
-        set_line(GPIO_CLK, 0);
-        delay_us(1);
-    }
-
-    return byte;
-}
-
-/* ─────────────────────────────────────────────────────────────────────────── */
-
-static int gpio_init(void)
-{
-    chip = gpiod_chip_open(GPIO_CHIP_PATH);
-    if (!chip) {
-        perror("gpiod_chip_open");
-        return -1;
-    }
-
-    /* Output settings: CLK and SH/LD — both start inactive (LOW) */
-    out_settings = gpiod_line_settings_new();
-    if (!out_settings) goto err_chip;
-    gpiod_line_settings_set_direction(out_settings, GPIOD_LINE_DIRECTION_OUTPUT);
-    gpiod_line_settings_set_output_value(out_settings, GPIOD_LINE_VALUE_INACTIVE);
-
-    /* Input settings: MISO (Q7) */
-    in_settings = gpiod_line_settings_new();
-    if (!in_settings) goto err_out_settings;
-    gpiod_line_settings_set_direction(in_settings, GPIOD_LINE_DIRECTION_INPUT);
-
-    /* Build the line config */
-    line_cfg = gpiod_line_config_new();
-    if (!line_cfg) goto err_in_settings;
-
-    {
-        unsigned int out_offsets[] = { GPIO_CLK, GPIO_SH_LD };
-        if (gpiod_line_config_add_line_settings(line_cfg, out_offsets, 2,
-                                                out_settings) < 0) {
-            perror("gpiod_line_config_add_line_settings (outputs)");
-            goto err_line_cfg;
+            // Rising edge: sample MISO on the rising edge (SPI Mode 3, CPHA=1)
+            GPIO_SET(GPIO_CLK);
+            if (GPIO_GET(GPIO_MISO))
+                byte |= (uint8_t)(1u << bit);
+            ns_delay(SPI_HALF_PERIOD_NS);
         }
+        buf[i] = byte;
     }
-    {
-        unsigned int in_offsets[] = { GPIO_MISO };
-        if (gpiod_line_config_add_line_settings(line_cfg, in_offsets, 1,
-                                                in_settings) < 0) {
-            perror("gpiod_line_config_add_line_settings (input)");
-            goto err_line_cfg;
-        }
-    }
-
-    /* Request config */
-    req_cfg = gpiod_request_config_new();
-    if (!req_cfg) goto err_line_cfg;
-    gpiod_request_config_set_consumer(req_cfg, "rtdp_test");
-
-    /* Acquire all three lines in one request */
-    request = gpiod_chip_request_lines(chip, req_cfg, line_cfg);
-    if (!request) {
-        perror("gpiod_chip_request_lines");
-        goto err_req_cfg;
-    }
-
-    /* Explicitly set CLK low, SH/LD high (shift / idle state) */
-    set_line(GPIO_CLK,   0);
-    set_line(GPIO_SH_LD, 1);
-
-    return 0;
-
-err_req_cfg:       gpiod_request_config_free(req_cfg);
-err_line_cfg:      gpiod_line_config_free(line_cfg);
-err_in_settings:   gpiod_line_settings_free(in_settings);
-err_out_settings:  gpiod_line_settings_free(out_settings);
-err_chip:          gpiod_chip_close(chip);
-    return -1;
 }
 
-static void gpio_cleanup(void)
+// ---------------------------------------------------------------------------
+// Helper: build and submit a line request.
+// Returns NULL on failure (settings/config objects are always freed).
+// ---------------------------------------------------------------------------
+static struct gpiod_line_request *request_lines(
+        struct gpiod_chip *chip,
+        const unsigned int *offsets, size_t num_offsets,
+        struct gpiod_line_settings *settings)
 {
-    if (request)      gpiod_line_request_release(request);
-    if (req_cfg)      gpiod_request_config_free(req_cfg);
-    if (line_cfg)     gpiod_line_config_free(line_cfg);
-    if (in_settings)  gpiod_line_settings_free(in_settings);
-    if (out_settings) gpiod_line_settings_free(out_settings);
-    if (chip)         gpiod_chip_close(chip);
+    struct gpiod_line_config    *lcfg  = gpiod_line_config_new();
+    struct gpiod_request_config *rcfg  = gpiod_request_config_new();
+    struct gpiod_line_request   *req   = NULL;
+
+    if (!lcfg || !rcfg)
+        goto out;
+
+    gpiod_request_config_set_consumer(rcfg, CONSUMER);
+
+    if (gpiod_line_config_add_line_settings(lcfg, offsets,
+                                            num_offsets, settings) < 0)
+        goto out;
+
+    req = gpiod_chip_request_lines(chip, rcfg, lcfg);
+
+out:
+    if (lcfg)  gpiod_line_config_free(lcfg);
+    if (rcfg)  gpiod_request_config_free(rcfg);
+    return req;
 }
 
-/* ─────────────────────────────────────────────────────────────────────────── */
+// ---------------------------------------------------------------------------
 
 int main(void)
 {
-    signal(SIGINT, handle_sigint);
+    signal(SIGINT, sigint_handler);
 
-    if (gpio_init() < 0)
-        return EXIT_FAILURE;
+    int rc = EXIT_FAILURE;
 
-    printf("Monitoring 74HC165 D6 — GPIO4(SH/LD) GPIO11(CLK) GPIO9(Q7)\n");
-    printf("Press Ctrl+C to stop.\n\n");
-    fflush(stdout);
-
-    /* Set DEBUG_RAW to 1 to print every raw byte — useful for wiring checks */
-#define DEBUG_RAW 1
-
-    int prev_d6 = 0;
-    unsigned long event_count = 0;
-    uint8_t prev_byte = 0xFF;   /* force first debug print */
-
-    while (running) {
-        uint8_t byte = hc165_read_byte();
-        int d6 = (byte & D6_MASK) ? 1 : 0;
-
-#if DEBUG_RAW
-        /* Print whenever the byte changes so the terminal isn't flooded */
-        if (byte != prev_byte) {
-            printf("[RAW] 0x%02X  "
-                   "D7=%d D6=%d D5=%d D4=%d D3=%d D2=%d D1=%d D0=%d\n",
-                   byte,
-                   (byte >> 7) & 1, (byte >> 6) & 1,
-                   (byte >> 5) & 1, (byte >> 4) & 1,
-                   (byte >> 3) & 1, (byte >> 2) & 1,
-                   (byte >> 1) & 1, (byte >> 0) & 1);
-            fflush(stdout);
-            prev_byte = byte;
-        }
-#endif
-
-        /* Detect LOW → HIGH transition on D6 */
-        if (d6 && !prev_d6) {
-            struct timespec ts;
-            clock_gettime(CLOCK_MONOTONIC, &ts);
-
-            printf("[%8ld.%06ld]  D6 HIGH  (byte = 0x%02X)  event #%lu\n",
-                   (long)ts.tv_sec,
-                   ts.tv_nsec / 1000L,
-                   byte,
-                   ++event_count);
-            fflush(stdout);
-        }
-
-        prev_d6 = d6;
-        delay_us(POLL_INTERVAL_US);
+    // -----------------------------------------------------------------------
+    // PREEMPT_RT: elevate to SCHED_FIFO and lock all memory to prevent
+    // page faults and scheduling latency during the bit-bang transfer.
+    // -----------------------------------------------------------------------
+    struct sched_param sp = { .sched_priority = 80 };
+    if (sched_setscheduler(0, SCHED_FIFO, &sp) < 0) {
+        perror("sched_setscheduler (need root or CAP_SYS_NICE)");
+        // Non-fatal — continue without RT priority.
+    }
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) < 0) {
+        perror("mlockall");
+        // Non-fatal — continue without memory locking.
     }
 
-    printf("\nCaught SIGINT — %lu D6 rising-edge events recorded. Exiting.\n",
-           event_count);
+    // -----------------------------------------------------------------------
+    // Map BCM2711 GPIO registers directly for zero-syscall bit-bang I/O.
+    // -----------------------------------------------------------------------
+    int gpiomem_fd = open(GPIOMEM_PATH, O_RDWR | O_SYNC);
+    if (gpiomem_fd < 0) {
+        perror("open /dev/gpiomem");
+        return EXIT_FAILURE;
+    }
+    g_gpio = (volatile uint32_t *)mmap(NULL, GPIO_MAP_SIZE,
+                                       PROT_READ | PROT_WRITE,
+                                       MAP_SHARED, gpiomem_fd, 0);
+    close(gpiomem_fd);
+    if (g_gpio == MAP_FAILED) {
+        perror("mmap /dev/gpiomem");
+        return EXIT_FAILURE;
+    }
 
-    gpio_cleanup();
-    return EXIT_SUCCESS;
+    struct gpiod_chip         *chip     = NULL;
+    struct gpiod_line_settings *s_hi    = NULL;  // output, initial HIGH
+    struct gpiod_line_settings *s_lo    = NULL;  // output, initial LOW
+    struct gpiod_line_settings *s_in    = NULL;  // plain input
+    struct gpiod_line_request  *out_req = NULL;  // CLK, CS1, DE, REn
+    struct gpiod_line_request  *in_req  = NULL;  // MISO + DRDY1
+
+    chip = gpiod_chip_open(GPIO_CHIP_PATH);
+    if (!chip) { perror("gpiod_chip_open"); goto cleanup; }
+
+    // --- Output settings: HIGH initial (CLK idles HIGH = CPOL=1; CS deasserted) ---
+    s_hi = gpiod_line_settings_new();
+    if (!s_hi) goto cleanup;
+    gpiod_line_settings_set_direction(s_hi, GPIOD_LINE_DIRECTION_OUTPUT);
+    gpiod_line_settings_set_output_value(s_hi, GPIOD_LINE_VALUE_ACTIVE);
+
+    // --- Output settings: LOW initial (DE=0; REn=0 = receiver enabled) ---
+    s_lo = gpiod_line_settings_new();
+    if (!s_lo) goto cleanup;
+    gpiod_line_settings_set_direction(s_lo, GPIOD_LINE_DIRECTION_OUTPUT);
+    gpiod_line_settings_set_output_value(s_lo, GPIOD_LINE_VALUE_INACTIVE);
+
+    // Build combined output request (CLK + CS1 HIGH, DE + REn LOW)
+    // We need separate settings per group: use two separate requests.
+    {
+        const unsigned int hi_offs[] = { GPIO_CLK, GPIO_CS1 };
+        const unsigned int lo_offs[] = { GPIO_RTDP_DE, GPIO_RTDP_REn };
+
+        // Build a single request covering all four output lines with mixed
+        // initial values using one line_config with two settings entries.
+        struct gpiod_line_config    *lcfg = gpiod_line_config_new();
+        struct gpiod_request_config *rcfg = gpiod_request_config_new();
+        if (!lcfg || !rcfg) {
+            gpiod_line_config_free(lcfg);
+            gpiod_request_config_free(rcfg);
+            goto cleanup;
+        }
+        gpiod_request_config_set_consumer(rcfg, CONSUMER);
+        gpiod_line_config_add_line_settings(lcfg, hi_offs, 2, s_hi);
+        gpiod_line_config_add_line_settings(lcfg, lo_offs, 2, s_lo);
+        out_req = gpiod_chip_request_lines(chip, rcfg, lcfg);
+        gpiod_line_config_free(lcfg);
+        gpiod_request_config_free(rcfg);
+    }
+    if (!out_req) { perror("request outputs"); goto cleanup; }
+
+    // --- MISO + DRDY1: plain inputs (level read via mmap for zero-latency polling) ---
+    s_in = gpiod_line_settings_new();
+    if (!s_in) goto cleanup;
+    gpiod_line_settings_set_direction(s_in, GPIOD_LINE_DIRECTION_INPUT);
+
+    {
+        const unsigned int offs[] = { GPIO_MISO, GPIO_DRDY1 };
+        in_req = request_lines(chip, offs, 2, s_in);
+    }
+    if (!in_req) { perror("request MISO/DRDY inputs"); goto cleanup; }
+
+    // Settings objects no longer needed after all requests are made
+    gpiod_line_settings_free(s_hi);  s_hi  = NULL;
+    gpiod_line_settings_free(s_lo);  s_lo  = NULL;
+    gpiod_line_settings_free(s_in);  s_in  = NULL;
+
+    printf("RTDP test started — DATA_RDY on GPIO %u, SPI Mode 3, mmap busy-poll\n",
+           GPIO_DRDY1);
+    printf("Press Ctrl+C to quit.\n\n");
+    printf("%-10s  %-14s %-14s %-14s %-14s\n",
+           "Sample", "CH1 (raw)", "CH2 (raw)", "CH3 (raw)", "CH4 (raw)");
+    printf("%-10s  %-14s %-14s %-14s %-14s\n",
+           "----------", "--------------", "--------------",
+           "--------------", "--------------");
+
+    uint64_t sample_count = 0;
+    uint8_t  rx[RTDP_NUM_BYTES];
+
+    while (g_running) {
+        // Busy-poll for DATA_RDY rising edge via mmap'd GPIO registers.
+        // libgpiod poll() has 100–300 µs kernel wakeup latency even on PREEMPT_RT,
+        // which can exhaust the Pico's 500 µs CS-wait timeout before CS is asserted.
+        // Direct register reads are ~1 ns each — latency is negligible.
+        {
+            struct timespec t_deadline;
+            clock_gettime(CLOCK_MONOTONIC, &t_deadline);
+            t_deadline.tv_sec += DRDY_TIMEOUT_S;
+
+            // Step 1: wait for LOW so we catch a fresh rising edge
+            while (GPIO_GET(GPIO_DRDY1)) {
+                if (!g_running) goto done;
+                struct timespec now;
+                clock_gettime(CLOCK_MONOTONIC, &now);
+                if (now.tv_sec > t_deadline.tv_sec ||
+                    (now.tv_sec == t_deadline.tv_sec &&
+                     now.tv_nsec >= t_deadline.tv_nsec)) {
+                    printf("  [timeout: DATA_RDY stuck HIGH after %d s]\n",
+                           DRDY_TIMEOUT_S);
+                    goto next_sample;
+                }
+            }
+
+            // Step 2: wait for HIGH (the rising edge)
+            while (!GPIO_GET(GPIO_DRDY1)) {
+                if (!g_running) goto done;
+                struct timespec now;
+                clock_gettime(CLOCK_MONOTONIC, &now);
+                if (now.tv_sec > t_deadline.tv_sec ||
+                    (now.tv_sec == t_deadline.tv_sec &&
+                     now.tv_nsec >= t_deadline.tv_nsec)) {
+                    printf("  [timeout: no DATA_RDY after %d s]\n",
+                           DRDY_TIMEOUT_S);
+                    goto next_sample;
+                }
+            }
+        }
+
+        // Enable RPi RS-485 driver so CLK and CS reach the Pico over the bus.
+        // REn stays LOW (receiver always enabled to read MISO back).
+        GPIO_SET(GPIO_RTDP_DE);
+
+        // Assert CS (active low) — signals Pico Core 1 to enable its RS-485 TX driver.
+        GPIO_CLR(GPIO_CS1);
+        // Busy-wait for Pico Core 1 to detect CSn low and raise its DE.
+        // Core 1 poll latency + gpio_put(DE) + ISL83491 propagation is well under 5 µs;
+        // 10 µs gives comfortable margin without the scheduler jitter of usleep().
+        ns_delay(10000L);
+
+        // Read 16 bytes via direct-register bit-bang SPI Mode 3.
+        // Pico is the sole driver of MISO; RPi receiver (REn=LOW) listens.
+        spi_read_bytes(rx, RTDP_NUM_BYTES);
+
+        // Deassert CS, then disable RPi RS-485 driver.
+        GPIO_SET(GPIO_CS1);
+        GPIO_CLR(GPIO_RTDP_DE);
+
+        // Decode 4 × int32_t big-endian
+        int32_t samples[RTDP_NUM_CHANNELS];
+        for (int ch = 0; ch < RTDP_NUM_CHANNELS; ch++) {
+            int idx = ch * 4;
+            uint32_t raw = ((uint32_t)rx[idx + 0] << 24) |
+                           ((uint32_t)rx[idx + 1] << 16) |
+                           ((uint32_t)rx[idx + 2] <<  8) |
+                           ((uint32_t)rx[idx + 3]);
+            samples[ch] = (int32_t)raw;
+        }
+
+        sample_count++;
+        printf("%-10llu  %-14d %-14d %-14d %-14d\n",
+               (unsigned long long)sample_count,
+               samples[0], samples[1], samples[2], samples[3]);
+        continue;
+    next_sample:;
+    }
+    done:
+
+    // Safe shutdown: restore idle states
+    GPIO_SET(GPIO_CS1);         // CS deasserted
+    GPIO_SET(GPIO_CLK);         // CLK idle HIGH (CPOL=1)
+    GPIO_CLR(GPIO_RTDP_DE);     // RPi RS-485 driver disabled
+    // REn (GPIO 25) stays LOW via libgpiod-managed request — leave as-is
+    gpiod_line_request_set_value(out_req, GPIO_RTDP_REn, GPIOD_LINE_VALUE_INACTIVE);
+
+    rc = EXIT_SUCCESS;
+    printf("\nRTDP test stopped. %llu sample(s) received.\n",
+           (unsigned long long)sample_count);
+
+cleanup:
+    if (in_req)   gpiod_line_request_release(in_req);
+    if (out_req)  gpiod_line_request_release(out_req);
+    if (s_hi)     gpiod_line_settings_free(s_hi);
+    if (s_lo)     gpiod_line_settings_free(s_lo);
+    if (s_in)     gpiod_line_settings_free(s_in);
+    if (chip)     gpiod_chip_close(chip);
+    if (g_gpio && g_gpio != MAP_FAILED)
+        munmap((void *)g_gpio, GPIO_MAP_SIZE);
+    return rc;
 }

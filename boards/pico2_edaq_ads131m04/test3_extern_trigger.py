@@ -36,7 +36,7 @@ def main(sp, node_id, fileName):
     # Configure ADS131M04
     daq.set_clk(8192)  # Set clock to 8192 kHz
     daq.release_pico2_event() # Make sure Pico2-EVENT# line is released if not already
-    daq.set_osr(2048) # OSR of 1024 is 4kHz
+    daq.set_osr(16256) # OSR of 1024 is 4kHz
     daq.set_trigger_mode(2)  # External trigger
     #daq.set_trigger_mode(0)  # immediate trigger for testing
     daq.set_num_samples(NSAMPLES)  # samples per channel
@@ -48,9 +48,12 @@ def main(sp, node_id, fileName):
     node.release_event_line()
     node.disable_external_trigger()
     print("Before enabling trigger, result of Q command:", node.command_COMMS_MCU('Q'))
-    node.enable_external_trigger(200, 'pos')
+    node.enable_external_trigger(200, 'neg')
     node.set_LED(1) # Turn on LED to indicate waiting for trigger
     
+    # enable RTDP
+    daq.set_RTDP_timeout_us(500) # Set RTDP timeout to 1ms
+
     # tell the DAQ to start its sampling process
     daq.sample()  # Start sampling process
 
