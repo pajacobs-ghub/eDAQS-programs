@@ -1,4 +1,4 @@
-# jm_ads131m04_osr_test.py
+# test1_osr_test.py
 # This script is specific to Jeremy's "SUPER-ADC ADS131M04" board, either Revision B or C.
 # Sweep through various OSR settings and verify no error flags are set.
 #

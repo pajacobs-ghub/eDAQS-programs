@@ -1,8 +1,10 @@
-# jm_ads131m04_trig_test.py
+# jm_ads131m04_mach6_thermocouple.py
 # This script is specific to Jeremy's "SUPER-ADC ADS131M04" board, either Revision B or C.
-# Arm eDAQS to wait for an external trigger signal, then take a single sample and report the values.
+# Arm eDAQS to wait for an external trigger signal, then take NSAMPLES.
+# External trigger signal provided from TUSQ's TTL Pulse Generator
 #
 # JM 2025-11-09    First pass, adapted from diff_spec_monitor.py and test_6_external_trigger.py.
+# JM 2025-11-29    Iteration for Mach 6 thermocouple flat plate tests.
 import sys
 sys.path.append("../..")
 import time
@@ -10,11 +12,11 @@ import os
 from comms_mcu import rs485
 from comms_mcu.pic18f16q41_jm_ads131m04_comms import PIC18F16Q41_JM_ADS131M04_COMMS
 from daq_mcu.pico2_ads131m04 import PICO2_ADS131M04_DAQ
-from jm_ads131m04_plot import plot_channels
+from plot_function import plot_channels
 import struct
 
-NSAMPLES = 256  # number of samples to fetch after the trigger
-NPRETRIGGER = 256  # number of samples to fetch before the trigger
+NSAMPLES = 1600 # should be 800ms @ 4kHz (OSR 1024)
+NPRETRIGGER = 512  # number of samples to fetch before the trigger
 
 def main(sp, node_id, fileName):
     print("\n =====================================")
@@ -34,10 +36,9 @@ def main(sp, node_id, fileName):
     # Configure ADS131M04
     daq.set_clk(8192)  # Set clock to 8192 kHz
     daq.release_pico2_event() # Make sure Pico2-EVENT# line is released if not already
-    daq.set_osr(1024) # Default OSR
+    daq.set_osr(16256) # OSR of 1024 is 4kHz
     daq.set_trigger_mode(2)  # External trigger
     #daq.set_trigger_mode(0)  # immediate trigger for testing
-    daq.set_RTDP_timeout_us(500) # Activate the RTDP for testing by PJ 2026-01-07
     daq.set_num_samples(NSAMPLES)  # samples per channel
     print("DAQ_MCU ready: ", node.test_DAQ_MCU_is_ready())
     time.sleep(0.1)
@@ -47,9 +48,12 @@ def main(sp, node_id, fileName):
     node.release_event_line()
     node.disable_external_trigger()
     print("Before enabling trigger, result of Q command:", node.command_COMMS_MCU('Q'))
-    node.enable_external_trigger(50, 'pos')
+    node.enable_external_trigger(200, 'neg')
     node.set_LED(1) # Turn on LED to indicate waiting for trigger
     
+    # enable RTDP
+    daq.set_RTDP_timeout_us(500) # Set RTDP timeout to 1ms
+
     # tell the DAQ to start its sampling process
     daq.sample()  # Start sampling process
 

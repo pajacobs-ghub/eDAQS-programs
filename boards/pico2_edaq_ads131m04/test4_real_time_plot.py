@@ -1,4 +1,4 @@
-# jm_fact3_plot2_dpg.py
+# test4_real_time_plot.py
 # Real-time plotting of voltage data from the ADS131M04 and FACT3 amplifier hat.
 # This script continuously reads voltage data and plots it using DearPyGui
 # DearPyGui is much faster than matplotlib for real-time plotting
@@ -63,7 +63,7 @@ class RealtimeVoltageMonitorDPG:
                 dpg.add_plot_axis(dpg.mvYAxis, label="Voltage (V)", tag="ch2_y_axis")
                 
                 # Set y-axis limits
-                dpg.set_axis_limits("ch2_y_axis", -0.3, 0.3)
+                dpg.set_axis_limits("ch2_y_axis", -2.5, 2.5 )
                 
                 # Add horizontal line at 0V
                 dpg.add_line_series([0, 10], [0, 0], label="0V Reference", 
@@ -82,7 +82,7 @@ class RealtimeVoltageMonitorDPG:
                 dpg.add_plot_axis(dpg.mvYAxis, label="Voltage (V)", tag="ch3_y_axis")
                 
                 # Set y-axis limits
-                dpg.set_axis_limits("ch3_y_axis", -1.3, 1.3)
+                dpg.set_axis_limits("ch3_y_axis", -2.5, 2.5 )
                 
                 # Add horizontal line at 0V
                 dpg.add_line_series([0, 10], [0, 0], label="0V Reference", 
@@ -212,6 +212,12 @@ def main(sp, node_id):
     node1 = PIC18F16Q41_JM_ADS131M04_COMMS(node_id, sp)
     daq = PICO2_ADS131M04_DAQ(node1)
     
+    # Get versions, and reset DAQ_MCU
+    print(node1.get_version())
+    node1.reset_DAQ_MCU()
+    time.sleep(1.6)
+    print(daq.get_version())
+
     print(f"COMMS MCU: {node1.get_version()}")
     print(f"DAQ MCU:   {daq.get_version()}")
     print()
