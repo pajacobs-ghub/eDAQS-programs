@@ -1,24 +1,26 @@
-# pico2_daq_mcu_bu79100g.py
+# pico2_daq_mcu_mcp3301.py
 #
 # Peter J.
 # 2025-11-09: Adapted from avr64ea28_daq_mcu.py but not yet ready for use.
 # 2025-11-15: Clean up and put to first use.
 # 2026-01-02: Accommodate the RTDP implementation.
+# 2026-03-04: Adapted from pico2_daq_mcu_bu79100g.py amd avr64ea28_daq_mcu.py
 #
 import sys
 sys.path.append("..")
 from comms_mcu import rs485
-from comms_mcu.pic18f26q71_comms_3_mcu import PIC18F26Q71_COMMS_3_MCU
+from comms_mcu.pic18f26q71_comms_4_mcu import PIC18F26Q71_COMMS_4_MCU
 import struct
 
-class PICO2_DAQ_MCU_BU79100G(object):
+class PICO2_DAQ_MCU_MCP3301(object):
     """
-    DAC_MCU service functions for a Pico2 microcontroller driving 8 BU79100G ADCs.
+    DAC_MCU service functions for a Pico2 microcontroller driving 8 MCP3301 ADCs.
     """
 
     __slots__ = ['comms_MCU',
                  'n_reg', 'reg_labels', 'reg_labels_to_int',
-                 'trigger_modes', 'trigger_modes_int_to_sym']
+                 'trigger_modes', 'trigger_modes_int_to_sym',
+                 'trigger_slopes', 'trigger_slopes_int_to_sym']
 
     def __init__(self, comms_MCU):
         '''
@@ -28,13 +30,16 @@ class PICO2_DAQ_MCU_BU79100G(object):
         #
         # The following data should match the firmware programmed into the Pico2.
         # A dictionary is used so that it is easy to cross-check the labels.
-        self.n_reg = 5
+        self.n_reg = 8
         self.reg_labels = {
             0:'PERIOD_US',
             1:'NCHANNELS',
             2:'NSAMPLES',
             3:'TRIG_MODE',
-            4:'RTDP_US'
+            4:'TRIG_CHAN',
+            5:'TRIG_LEVEL',
+            6:'TRIG_SLOPE',
+            7:'RTDP_US'
         }
         assert self.n_reg == len(self.reg_labels), "Oops, check reg_labels."
         self.reg_labels_to_int = {
@@ -42,16 +47,29 @@ class PICO2_DAQ_MCU_BU79100G(object):
             'NCHANNELS':1,
             'NSAMPLES':2,
             'TRIG_MODE':3,
-            'RTDP_US': 4
+            'TRIG_CHAN':4,
+            'TRIG_LEVEL':5,
+            'TRIG_SLOPE':6,
+            'RTDP_US': 7
         }
         assert self.n_reg == len(self.reg_labels_to_int), "Oops, check reg_labels_to_int."
         self.trigger_modes = {
             'IMMEDIATE':0, 0:0,
-            'WAIT_FOR_EVENTn':1, 1:1
+            'INTERNAL':1, 1:1,
+            'EXTERNAL':2, 2:2
         }
         self.trigger_modes_int_to_sym = {
             0:'IMMEDIATE',
-            1:'WAIT_FOR_EVENTn'
+            1:'INTERNAL',
+            2:'EXTERNAL'
+        }
+        self.trigger_slopes = {
+            'NEG':0, 'BELOW':0, 0:0,
+            'POS':1, 'ABOVE':1, 1:1
+        }
+        self.trigger_slopes_int_to_sym = {
+            0:'NEG',
+            1:'POS'
         }
         return
 
@@ -76,6 +94,9 @@ class PICO2_DAQ_MCU_BU79100G(object):
         txt = self.comms_MCU.command_DAQ_MCU(f'r {i}')
         return int(txt)
 
+    def get_reg_by_name(self, name):
+        return self.get_reg(self.reg_labels_to_int[name])
+
     def set_reg(self, i, val):
         '''
         Sets the value of the i-th virtual-register and
@@ -86,6 +107,9 @@ class PICO2_DAQ_MCU_BU79100G(object):
             raise RuntimeError(f'Setting register {i} but n_reg_actual is {n_reg_actual}.')
         txt = self.comms_MCU.command_DAQ_MCU(f's {i} {val}')
         return int(txt.split()[1])
+
+    def set_reg_by_name(self, name, val):
+        return self.set_reg(self.reg_labels_to_int[name], val)
 
     def set_regs_to_factory_values(self):
         txt = self.comms_MCU.command_DAQ_MCU('F')
@@ -125,14 +149,21 @@ class PICO2_DAQ_MCU_BU79100G(object):
         '''
         ticks = int(dt_us)
         # [TODO] should put some checks on this.
-        self.set_reg(0, ticks)
+        self.set_reg_by_name('PERIOD_US', ticks)
         return
+
+    def set_nchannels(self, n):
+        self.set_reg_by_name('NCHANNELS', n)
+        return
+
+    def get_nchannels(self):
+        return self.get_reg_by_name('NCHANNELS')
 
     def get_sample_period_us(self):
         '''
         Returns sample period in microseconds.
         '''
-        return self.get_reg(0)
+        return self.get_reg_by_name('PERIOD_US')
 
     def set_RTDP_timeout_us(self, dt_us):
         '''
@@ -144,7 +175,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
         '''
         ticks = int(dt_us)
         # [TODO] should put some checks on this.
-        self.set_reg(4, ticks)
+        self.set_reg_by_name('RTDP_US', ticks)
         return
 
     def immediate_sample_set(self):
@@ -159,16 +190,16 @@ class PICO2_DAQ_MCU_BU79100G(object):
 
     def analog_millivolts(self):
         '''
-        Returns the analog voltage (driving the BU79100G ADCs)
-        in millivolts, as an integer.
+        Returns the analog reference voltages (for the MCP3301 ADCs)
+        in millivolts, as a list of integers.
         '''
-        return self.comms_MCU.analog_millivolts()
+        return self.comms_MCU.get_V_REF_AB_millivolts()
 
     def get_trigger_mode(self):
         '''
         Returns the integer value representing the trigger mode.
         '''
-        return self.get_reg(3)
+        return self.get_reg_by_name('TRIG_MODE')
 
     def set_trigger_immediate(self):
         '''
@@ -177,19 +208,35 @@ class PICO2_DAQ_MCU_BU79100G(object):
         Recording will start immediately that the MCU is told to start sampling
         and will stop after nsamples have been recorded.
         '''
-        self.set_reg(3, self.trigger_modes['IMMEDIATE'])
+        self.set_reg_by_name('TRIG_MODE', self.trigger_modes['IMMEDIATE'])
         return
 
-    def set_trigger_wait_for_eventn(self):
+    def set_trigger_internal(self, chan, level, slope):
         '''
-        Set the trigger mode to WAIT_FOR_EVENTn.
+        Set the trigger mode to INTERNAL.
+
+        Recording will start immediately that the MCU is told to start sampling
+        and will continue indefinitely, until the specified channel crosses
+        the specified level.
+        nsamples with then be recorded and the sampling stops.
+        '''
+        # [TODO] some checking for reasonable input.
+        self.set_reg_by_name('TRIG_MODE', self.trigger_modes['INTERNAL'])
+        self.set_reg_by_name('TRIG_CHAN', chan)
+        self.set_reg_by_name('TRIG_LEVEL', level)
+        self.set_reg_by_name('TRIG_SLOPE', self.trigger_slopes[slope])
+        return
+
+    def set_trigger_external(self):
+        '''
+        Set the trigger mode to EXTERNAL.
 
         Recording will start immediately that the MCU is told to start sampling
         and will continue indefinitely, until the EVENTn line goes low.
         nsamples with then be recorded and the sampling stops after.
         '''
         # [TODO] some checking for reasonable input.
-        self.set_reg(3, self.trigger_modes['WAIT_FOR_EVENTn'])
+        self.set_reg_by_name('TRIG_MODE', self.trigger_modes['EXTERNAL'])
         return
 
     def set_nsamples(self, n):
@@ -200,7 +247,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
         if n < 0: n = 100 # Somewhat arbitrary.
         # The Pico2 retains only 16k sample sets.
         if n > 32768: n = 32768
-        self.set_reg(2, n)
+        self.set_reg_by_name('NSAMPLES', n)
         return
 
     def start_sampling(self):
@@ -281,7 +328,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
 
         Note that this number should be treated as an unsigned integer.
         '''
-        return self.get_reg(2)
+        return self.get_reg_by_name('NSAMPLES')
 
     def get_formatted_sample(self, i):
         '''
@@ -399,7 +446,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
         dt_us = self.get_sample_period_us()
         late_flag = self.did_not_keep_up_during_sampling()
         analog_gain = 1.0 # No choice for the BU79100G.
-        ref_voltage = self.analog_millivolts()/1000
+        ref_voltage = [v/1000 for v in self.analog_millivolts()]
         return {'total_bytes':total_bytes,
                 'total_pages':total_pages,
                 'bytes_per_sample_set':bytes_per_sample_set,
@@ -459,7 +506,7 @@ class PICO2_DAQ_MCU_BU79100G(object):
 if __name__ == '__main__':
     # A basic test to see if the eDAQS node is attached and awake.
     # Assuming that you have node '2', typical use on a Linux box:
-    # $ python3 pico2_daq_mcu_bu79100g.py -i 2
+    # $ python3 pico2_daq_mcu_mcp3301.py -i 2
     import time
     import argparse
     parser = argparse.ArgumentParser(description="eDAQS node test program")
@@ -468,21 +515,21 @@ if __name__ == '__main__':
     args = parser.parse_args()
     port_name = '/dev/ttyUSB0'
     if args.port: port_name = args.port
-    node_id = 'E'
+    node_id = 'F'
     if args.identity: node_id = args.identity
     sp = rs485.openPort(port_name)
     if sp:
-        node1 = PIC18F26Q71_COMMS_3_MCU(node_id, sp)
+        node1 = PIC18F26Q71_COMMS_4_MCU(node_id, sp)
         print("Just some fiddling around to see that board is alive.")
         # We assume that a LED is attached to RA6
         # bits                                      decimal
         #    7    6    5    4    3    2    1    0    value
-        #    X    X    X    X  RA6  RA5  RA4  RA2
+        #    X    X    X    X  RA7  RA6  RA5  RA4
         #    0    0    0    0    0    1    1    1  ==  7
         #    0    0    0    0    1    0    0    0  ==  8
-        node1.utility_pins_write_ANSEL(7) # RA6 as digital; others analog
-        node1.utility_pins_write_TRIS(7) # RA6 as output; others input
-        node1.utility_pins_write_LAT(8) # set RA6 high to turn LED on
+        node1.utility_pins_write_ANSEL(7) # RA7 as digital; others analog
+        node1.utility_pins_write_TRIS(7) # RA7 as output; others input
+        node1.utility_pins_write_LAT(8) # set RA7 high to turn LED on
         print(node1.get_version())
         # If we have been reprogramming the DAQ_MCU while the COMMS_MCU is running,
         # we will likely have rubbish characters in its RX2 buffer.
@@ -491,7 +538,7 @@ if __name__ == '__main__':
             node1.reset_DAQ_MCU()
             time.sleep(2.0)
         node1.flush_rx2_buffer()
-        daq_mcu = PICO2_DAQ_MCU_BU79100G(node1)
+        daq_mcu = PICO2_DAQ_MCU_MCP3301(node1)
         print(daq_mcu.get_version())
         daq_mcu.set_regs_to_factory_values()
         print(daq_mcu.get_reg_values_as_text())

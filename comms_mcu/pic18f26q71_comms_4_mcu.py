@@ -64,13 +64,13 @@ class PIC18F26Q71_COMMS_4_MCU(object):
         #   1=ANA1 (V_REF_A)
         #   9=ANB1 (V_REF_B)
         # Returns:
-        #   millivolts
+        #   millivolts as an integer
         #
         # We have a 4096mV reference and we are using a 12-bit converter,
         # so the integer count is already in millivolts.
         #
         txt = self.command_COMMS_MCU(f'a {pin}')
-        return txt
+        return int(txt)
 
     def set_V_REF_AB(self, a=255, b=255):
         # Input:
@@ -78,6 +78,9 @@ class PIC18F26Q71_COMMS_4_MCU(object):
         #   b: 8-bit value for DAC3 to set V_REF_B = 4096mV * b/256
         txt = self.command_COMMS_MCU(f'w {a} {b}')
         return
+
+    def get_V_REF_AB_millivolts(self):
+        return [self.analog_read(1), self.analog_read(9)]
 
     def assert_event_line_low(self):
         txt = self.command_COMMS_MCU('t')
@@ -189,7 +192,7 @@ if __name__ == '__main__':
         print("Adjust the analog reference voltages.")
         node1.set_V_REF_AB(128, 128)
         time.sleep(0.2)
-        print(f"V_REF_A={node1.analog_read(1)}mV V_REF_B={node1.analog_read(9)}mV")
+        print(f"millivolts={node1.get_V_REF_AB_millivolts()}")
     else:
         print("Did not find the serial port.")
     print("Done.")
