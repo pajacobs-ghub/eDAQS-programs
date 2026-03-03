@@ -109,8 +109,8 @@ class PIC18F26Q71_COMMS_4_MCU(object):
         '''
         Enable the external-trigger input to the PIC MCU.
 
-        level is an 8-bit integer 0-255.
-        The analog trigger is set at (level/256 * 2.048) Volts.
+        level is an 10-bit integer 0-1023.
+        The analog trigger is set at (level/1024 * 4.096) Volts.
 
         With positive slope the EVENTn line is driven active-low
         when the external voltage exceeds the trigger level.
@@ -122,7 +122,7 @@ class PIC18F26Q71_COMMS_4_MCU(object):
         '''
         level = int(level)
         if level < 0: level = 0
-        if level > 255: level = 255
+        if level > 1023: level = 1023
         slope = trigger_options[slope]
         txt = self.command_COMMS_MCU(f'e {level} {slope}')
         if txt.find('error') >= 0:
