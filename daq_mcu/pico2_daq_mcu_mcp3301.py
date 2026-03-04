@@ -106,7 +106,8 @@ class PICO2_DAQ_MCU_MCP3301(object):
         if i >= n_reg_actual:
             raise RuntimeError(f'Setting register {i} but n_reg_actual is {n_reg_actual}.')
         txt = self.comms_MCU.command_DAQ_MCU(f's {i} {val}')
-        return int(txt.split()[1])
+        print(f'txt={txt}')
+        return int(txt.split()[-1])
 
     def set_reg_by_name(self, name, val):
         return self.set_reg(self.reg_labels_to_int[name], val)
