@@ -1,8 +1,10 @@
-# test_3_transient_recording.py
+# test_4_transient_recording_with_RTDP.py
 # Make a short recording with an internal trigger,
 # then fetch a selection of the memory and unpack the samples.
 # We have a 1kHz sine wave on channels 0 and 1.
-# PJ 2025-11-15, 2025-11-16 1MSps demo. 2026-03-06 Adapt to MCP3301 board.
+# PJ 2025-11-15, 2025-11-16 1MSps demo.
+#    2026-03-06 Adapt to MCP3301 board.
+#    2026-03-08 RTDP monitoring enabled
 
 import sys
 sys.path.append("../..")
@@ -14,7 +16,7 @@ from daq_mcu.pico2_daq_mcu_mcp3301 import PICO2_DAQ_MCU_MCP3301
 def main(sp, node_id):
     node1 = PIC18F26Q71_COMMS_4_MCU(node_id, sp)
     #
-    print("Example of a recording with plot of collected data.")
+    print("Example of a recording with plot of collected data and RTDP active.")
     print(node1.get_version())
     # Have put in the Pico2 reset so that previous testing
     # that involved recording and the Pico2 pulling active-low EVENT#
@@ -33,6 +35,7 @@ def main(sp, node_id):
     print("Prepare to make a recording.")
     node1.set_V_REF_AB(32, 32)  # should get us 0.5 volts as the ADC reference
     daq_mcu.set_sample_period_us(20)
+    daq_mcu.set_RTDP_timeout_us(300)
     daq_mcu.set_nchannels(2)
     daq_mcu.set_nsamples(500)
     print("Monitor chan 0 analog voltage for trigger event.")
@@ -81,7 +84,7 @@ def main(sp, node_id):
 
 if __name__ == '__main__':
     # Typical use on a Linux box:
-    # $ python3 test_3_transient_recording.py -i F
+    # $ python3 test_4_transient_recording_with_RTDP.py -i F
     import argparse
     parser = argparse.ArgumentParser(description="eDAQS node test program")
     parser.add_argument('-p', '--port', dest='port', help='name for serial port')
