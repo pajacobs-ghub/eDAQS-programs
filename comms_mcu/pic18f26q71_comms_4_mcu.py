@@ -57,6 +57,63 @@ class PIC18F26Q71_COMMS_4_MCU(object):
         txt = self.command_COMMS_MCU(f'u W {val}')
         return txt
 
+    def i2c_write(self, addr7bit, byte_array):
+        cmd_txt = f'b w {addr7bit} {len(byte_array)}'
+        for b in byte_array: cmd_txt += f' {b}'
+        txt = self.command_COMMS_MCU(cmd_txt)
+        if 'error' in txt:
+            raise RuntimeError(f"i2c_write error: {txt}")
+        items = txt.split()
+        if items[0] == 'w':
+            addr = int(items[1])
+            nbytes = int(items[2])
+            bytes_written = [int(item) for item in items[3:]]
+        else:
+            bytes_written = []
+        return bytes_written
+
+    def i2c_read(self, addr7bit, nbytes):
+        cmd_txt = f'b r {addr7bit} {nbytes}'
+        txt = self.command_COMMS_MCU(cmd_txt)
+        if 'error' in txt:
+            raise RuntimeError(f"i2c_read error: {txt}")
+        items = txt.split()
+        if items[0] == 'r':
+            addr = int(items[1])
+            nbytes = int(items[2])
+            bytes_read = [int(item) for item in items[3:]]
+        else:
+            bytes_read = []
+        return bytes_read
+
+    def spi_init(self, upin, ckp, cke, smp):
+        cmd_txt = f'c i {upin} {ckp} {cke} {smp}'
+        txt = self.command_COMMS_MCU(cmd_txt)
+        if 'error' in txt:
+            raise RuntimeError(f"spi_init error: {txt}")
+        return
+
+    def spi_close(self):
+        cmd_txt = 'c c'
+        txt = self.command_COMMS_MCU(cmd_txt)
+        if 'error' in txt:
+            raise RuntimeError(f"spi_close error: {txt}")
+        return
+
+    def spi_exchange(self, byte_array):
+        cmd_txt = f'c e {len(byte_array)}'
+        for b in byte_array: cmd_txt += f' {b}'
+        txt = self.command_COMMS_MCU(cmd_txt)
+        if 'error' in txt:
+            raise RuntimeError(f"spi_exchange error: {txt}")
+        items = txt.split()
+        if items[0] == 'e':
+            nbytes = int(items[2])
+            bytes_read = [int(item) for item in items[3:]]
+        else:
+            bytes_read = []
+        return bytes_read
+
     def analog_read(self, pin):
         # Input:
         # analog channel selector:
