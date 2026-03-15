@@ -5,29 +5,35 @@ This directory contains example Python code for supervising the Pico2+MCP3301 bo
 
 ## Hardware Description
 
-The Pico2+MCP3301 is an embeddable data acquisition board 
-based on an RP2350 microcontroller (Pico2 board) 
+The Pico2+MCP3301 is an embeddable data acquisition board
+for recording transient events in low-voltage analog signals. 
+It is based on an RP2350 microcontroller (on a Pico2 board) 
 driving eight MCP3301 analog-to-digital converter chips.
 A PIC18F26Q71 microcontroller acts as board manager and 
-handles serial communication with a supervising personal computer.
+handles serial communication with a supervising personal computer,
+over a multidrop RS485 bus.
 
 The analog signals (nominally 0-5V) are interfaced 
 to the J8 through J11 pin headers at the left side of the photograph (below).
 Each converter accepts a differential signal and converts it to a 13-bit signed digital value at a maximum rate of 50kHz.
+We might push this to 100kHz with revised firmware.
+Note that sampling is synchronous across all 8 converters.
 
 The RS485 connection, together with power-input pins, 
 is attached to the J5 pin header at the bottom right of the photograph.
 The board is intended to be operated via text commands from the personal computer, 
 with the board responding only to commands that have been addressed to it.
 Several boards can sit on the same RS485 bus and can record concurrently.
+Synchronization across boards is provided by the Event# signal.
 
 ![Photograph of the Pico2+8xMCP3301 board](./figures/Pico2+MCP3301-eDAQ-photo.png)
 
 ### The recording process
 
 The schematic diagram of the board is shown in the figure below.
-The two principal components are the RP2350 microcontroller on the Pico2 board,
-called the DAQ-MCU, and the PIC18F26Q71-I/P which is called the COMMS-MCU.
+The two principal components are the RP2350 microcontroller
+(which we call the DAQ-MCU) on the Pico2 board,
+and the PIC18F26Q71-I/P, which we call the COMMS-MCU.
 This arrangement enables the DAQ-MCU to be fully committed to regular 
 sampling of the analog signals while the COMMS-MCU remains responsive
 to the supervisory computer's commands. 
@@ -37,11 +43,12 @@ to the supervisory computer's commands.
 To the left, the analog input signals (at pin headers J8 through J11) 
 are labelled A0+,A0-, ... A4+,A4-, ... A7+,A7- to indicate that they
 are differential.
-If you have a single-ended signal, just connect ground to the Vx- pin.
+If you have a single-ended signal, 
+just connect ground to the corresponding Vx- pin.
 The reference voltages (VREFA and VREFB) provided by the PIC18 COMMS-MCU
 to the data converters may be set within the range 400mV to 4096mV.
  
-The 5V and 0V power rails are also available at the same analog-in headers.
+The 5V and 0V power rails are also available at the same analog-input headers.
 These may be a convenient power source for attached sensors, however,
 note that there is a Schottky diode in the power rail so the actual 
 voltage getting to the sensors will be a little less than the +5V supply
@@ -60,9 +67,14 @@ The Event# signal is a common signal that can be asserted (pulled low)
 by either the DAQ-MCU, the COMMS-MCU, or an external device.
 This signal going low heralds "the event" and also the end of the recording process.
 Note that, following the Event# signal going low, the recording 
-continues for a number of samples before actually stopping.
+continues for a fixed number of samples before actually stopping.
 Once sampling has stopped, the DAQ-MCU becomes idle and no longer asserts
-the Busy signal.
+the Busy# signal.
+
+The stored data can be later retrieved via the serial communications interface.
+There are commands for retrieving individual sample sets or pages of memory.
+A layer of Python code that automates the interaction via RS485 messages
+reduces this process to a small number of function calls.
 
 ### Communications Interface
 
@@ -70,7 +82,7 @@ Pin header J5, at the bottom right of the board photo
 (but top right of the schematic), 
 is used to provide 5V power and access to the RS485 bus.
 It also provides access to the common Event# signal
-so that the recording on several node boards can be synchronized.
+so that the recording on several recording boards can be synchronized.
 The pins are:
 
 1. 5V
@@ -106,6 +118,8 @@ and should allow reliable communication over reasonably long wires.
 The serial settings are speed of 115200 baud, 8-bit data, no parity and 1 stop bit.
 The supervisory computer acts as the master on the RS485 bus
 and each node board responds only when a command message is directed to it.
+The identity of each node is a single ASCII character and 
+is programmed into the firmware on the COMMS-MCU.
 
 ### Analog-Front-End Management Interface
 
