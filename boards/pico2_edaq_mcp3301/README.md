@@ -208,8 +208,6 @@ to send that new-line character.
 
 ### COMMS-MCU commands
 
-TODO: revise for COMMS-4
-
 Once the start and end characters of the command message are stripped,
 the commands to the COMMS-MCU are of the form of a single character 
 usually followed by any needed parameters as space-separated integers.
@@ -224,21 +222,54 @@ An exception is the pass-through command.
 | F       | Flush the RX2 buffer for incoming text from the DAQ-MCU. |
 | R       | Restart the DAQ-MCU. |
 | L i     | Turn the LED on (i=1) or off (i=0). |
-| a       | Report the ADC value for the analog signal on the comparator input. |
-| e level slope | Enable the comparator 0 < level < 255, slope is 0 or 1. |
+| a i     | Report the ADC value for the analog signal on pin. |
+|         | i=0 ANA0, external trigger |
+|         | i=1 ANA1/OPA1OUT, V_REF_A |
+|         | i=9 ANB1/OPA2OUT, V_REF_B |
+|         | i=4 ANA4/RA4, GPIO 0 |
+|         | i=5 ANA5/RA5, GPIO 1 |
+|         | i=6 ANA6/RA6, GPIO 2 |
+|         | i=7 ANA7,RA7, GPIO 3 |
+| e level slope | Enable the comparator for external trigger |
+|         | 0 < level < 1023 with 4096mV reference |
+|         | slope: 0=trigger-on-falling-signal or 1=trigger-on-rising signal |
 | d       | Disable comparator and release Event# line |
-| w level flag | Set VREF output, 0 < level < 255, flag=1 for on, 0 for off. |
+| u action bitmask | Interact with the GPIO pins on the AFE management interface |
+|         | action=`P` read PORT pins (for input; bitmask not required) |
+|         | action=`T` set TRIS bits (output drive control 1=input 0=output) |
+|         | action=`O` set ODC bits (open-drain control) |
+|         | action=`W` set WPU bits (enable weak pull-up) |
+|         | action=`L` set LAT bits (latch for output) |
+|         | action=`A` set ANSEL bits (1=analog 0=digital-input-buffer) |
+|         | bits are mapped to the relevant pins as |
+|         | `bit    7   6   5   4 ..3 ..2 ..1 ..0` |
+|         | `pin    X   X   X   X RA7 RA6 RA5 RA4` |
+| b r addr n | Read n bytes from the AFE board via I2C |
+|            | addr is the 7-bit address of the slave device |
+| b w addr n B0 B1 ... | Write n bytes to the AFE board via I2C |
+|         | addr is the 7-bit address |
+|         | B0 B1 ... are the byte values as decimal integers |
+| c i upin tkp tke smp | Initialize the SPI module for with the AFE interface |
+|         | upin specifies which GPIO pin is used as slave select | 
+|         | tkp is clock polarity bit (0=idle low; 1=idle high) |
+|         | tke is data output edge bit (0=first edge; 1=second edge) |
+|         | smp is sample-time (0=mid of output time; 1=end of output time) |
+| c c     | Close the SPI module |
+| c e n B0 B1 ... | Exchange n bytes via the SPI module |
+|         | B0 B1 ... are the out-going bytes as decimal integers |
+| w levelA levelB | Set V_REF_A and V_REF_B output |
+|         | 0 < level < 255 with reference voltage 4096mV |
+|         | A value of 25 will result in a voltage of 400mV which is |
+|         | the minimum operating reference voltage for the MCP3301. |
 | Xxxxxxxx | Pass command xxxxxxx through to DAQ-MCU. | 
 
-For example, to get the version string of the COMMS-MCU on node `1`,
+For example, to get the version string of the COMMS-MCU on node `F`,
 issue the command
 
-`/1v!\n`
+`/Fv!\n`
 
 
 ### DAQ-MCU commands
-
-TODO: Revise for Pico2
 
 Commands passed through to the DAQ-MCU are of the form 
 of a single character followed by any needed parameters 
@@ -248,10 +279,8 @@ as space-separated integers.
 | Command | Meaning |
 |---------|:--------|
 | v       | Report version string. |
+| L i     | LED control; 0=off, 1=on. | 
 | n       | Report number of (virtual) registers. |
-| Q       | Set the reporting mode to allow multi-line responses. Only useful for interaction via a TTL-232-5V cable. |
-| q       | Set the reporting mode to single-line responses. Default for interaction via the RS485 bus. |
-| p       | Report all register values.  Should not be used via the RS485 bus. |
 | r i     | Report the value of register i. |
 | s i j   | Set register i to value j. |
 | R       | Restore register values from EEPROM. |
@@ -260,7 +289,7 @@ as space-separated integers.
 | g       | Start the sampling process.  What happens next depends on the register settings and external signals. |
 | G       | Start the sampling process and report values.  Should not use via the RS485 bus. |
 | k       | Report the value of flag did_not_keep_up_during_sampling. |
-| I       | Sample channels once and report values. |
+| I       | Sample channels immediately and report values. |
 | P i     | Report values for sample set i.  i=0 for oldest sample set. |
 | M i     | Report the content of 32 bytes of SRAM memory from byte address i. |
 | a       | Report byte address of oldest data in SRAM. |
@@ -269,29 +298,32 @@ as space-separated integers.
 | T       | Report total size of SRAM in bytes. |
 | N       | Report total number of 32-byte pages in SRAM. |
 | z       | Release Event# line. |
-| h or ?  | Report the help text. Should not be used via the RS485 bus. |
 
 
-For example, to get the version string of the DAQ-MCU on node `1`,
+For example, to get the version string of the DAQ-MCU on node `F`,
 issue the command
 
-`/1Xv!\n`
+`/FXv!\n`
+
 
 ### Configuration registers of the DAQ-MCU
 
 The process of making a recording is controlled by the content of the 
 configuraton (virtual) registers in the DAQ-MCU.
-These are an array of 32-bit numbers that may be set or read via command.
+These are an array of signed 16-bit numbers that may be set or read via command.
 
 | Index | Default | Meaning |
 |-------|---------|:--------|
-| 0     | 1250    | Sample period in microseconds. |
-| 1     | 8       | Number of channels to sample. Best to choose 8, 4, 2 or 1. |
+| 0     | 100     | Sample period in microseconds. |
+| 1     | 8       | Number of channels to sample. Best to choose 1, 2, 4 or 8. |
 | 2     | 128     | Number of samples in record after trigger event. |
 | 3     | 0       | Trigger mode.  0=immediate, 1=internal, 2=external (via Event# signal) |
 | 4     | 0       | Channel for internal trigger, if used. |
-| 5     | 100     | Internal trigger level as an 11-bit count, 0-2047 |
+| 5     | 100     | Internal trigger level. |
+|       |         | Note that sampled data values will be in the range -8192..8191. |
 | 6     | 1       | Internal trigger slope. 0=sample-goes-below-level, 1=sample-goes-above-level. |
+| 7     | 0       | Advertising period (in microseconds) for the RTDP. |
+|       |         | A value of 0 disables the RTDP. |
 
 
 ## Python module
