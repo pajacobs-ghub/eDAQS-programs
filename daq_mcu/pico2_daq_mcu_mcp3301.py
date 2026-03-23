@@ -307,8 +307,28 @@ class PICO2_DAQ_MCU_MCP3301(object):
         so that sample sets fit neatly into the available SRAM space.
         A sample set will not be split over the end/beginning of
         the address-space.
+
+        Until one full pass of the data space, this address will sit at zero.
+        Once the data space has been filled and the address wraps,
+        this returned address will be the same as for the next data to be written.
         '''
         return int(self.comms_MCU.command_DAQ_MCU('a'))
+
+    def get_byte_address_of_next_data(self):
+        '''
+        Returns the byte-address of the next data sample to be written
+        into the SRAM memory.
+
+        Since the SRAM memory is treated as a circular buffer,
+        this address may be almost anywhere in the available range
+        and will wrap around once the memory is full.
+
+        The possible sizes of each sample set is restricted
+        so that sample sets fit neatly into the available SRAM space.
+        A sample set will not be split over the end/beginning of
+        the address-space.
+        '''
+        return int(self.comms_MCU.command_DAQ_MCU('A'))
 
     def get_size_of_SRAM_in_pages(self):
         '''
@@ -380,6 +400,7 @@ class PICO2_DAQ_MCU_MCP3301(object):
         '''
         DEBUG = True
         byte_addr_of_oldest_data = self.get_byte_address_of_oldest_data()
+        byte_addr_of_next_data = self.get_byte_address_of_next_data()
         total_bytes = self.get_size_of_SRAM_in_bytes()
         _ba = bytearray(total_bytes)
         total_pages = self.get_size_of_SRAM_in_pages()
@@ -394,15 +415,24 @@ class PICO2_DAQ_MCU_MCP3301(object):
         else:
             # Recording starts before trigger event,
             # at some indeterminant time.
-            total_samples = self.get_max_nsamples()
-            nsamples_before_trigger = total_samples - nsamples_after_trigger
-        # The oldest sample set in SRAM has index 0.
+            if byte_addr_of_oldest_data == byte_addr_of_next_data:
+                # We assume that the address has wrapped around and
+                # the data completely fills the SRAM buffer
+                total_samples = self.get_max_nsamples()
+            else:
+                total_samples = byte_addr_of_next_data // bytes_per_sample_set
+            if total_samples > nsamples_after_trigger:
+                nsamples_before_trigger = total_samples - nsamples_after_trigger
+            else:
+                nsamples_before_trigger = 0
+        # The oldest sample set in selection is assigned sample index 0.
         trigger_sample_index = nsamples_before_trigger
         if DEBUG:
             print(f'total_bytes={total_bytes}')
             print(f'total_pages={total_pages}')
             print(f'bytes_per_sample_set={bytes_per_sample_set}')
             print(f'byte_addr_of_oldest_data={byte_addr_of_oldest_data}')
+            print(f'byte_addr_of_next_data={byte_addr_of_next_data}')
             print(f'total_samples={total_samples}')
             print(f'nsamples_after_trigger={nsamples_after_trigger}')
             print(f'nsamples_before_trigger={nsamples_before_trigger}')
