@@ -39,7 +39,7 @@ def main(sp, node_id):
     daq_mcu.set_nchannels(2)
     daq_mcu.set_nsamples(1000)
     print("Monitor chan 0 analog voltage for trigger event.")
-    daq_mcu.set_trigger_internal(0, 2200, 1)
+    daq_mcu.set_trigger_internal(0, 500, 1)
     print(daq_mcu.get_reg_values_as_text())
     if node1.test_event_has_passed():
         print("Event has passed before we started sampling; quitting script.")
