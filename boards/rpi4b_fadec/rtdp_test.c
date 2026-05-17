@@ -22,6 +22,9 @@
 //  gcc -O2 -Wall -o rtdp_test rtdp_test.c -lgpiod
 //  (run as root or with CAP_SYS_NICE + readable /dev/gpiomem)
 
+// SSH NOTES:
+// jeremy@fadec
+
 // REQUIREMENTS:
 //  sudo apt install libgpiod-dev
 

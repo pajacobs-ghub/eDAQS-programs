@@ -62,9 +62,6 @@ class RealtimeVoltageMonitorDPG:
                 dpg.add_plot_axis(dpg.mvXAxis, label="Time (s)", tag="ch2_x_axis")
                 dpg.add_plot_axis(dpg.mvYAxis, label="Voltage (V)", tag="ch2_y_axis")
                 
-                # Set y-axis limits
-                dpg.set_axis_limits("ch2_y_axis", -2.5, 2.5 )
-                
                 # Add horizontal line at 0V
                 dpg.add_line_series([0, 10], [0, 0], label="0V Reference", 
                                    parent="ch2_y_axis", tag="ch2_zero_line")
@@ -80,9 +77,6 @@ class RealtimeVoltageMonitorDPG:
                 dpg.add_plot_legend()
                 dpg.add_plot_axis(dpg.mvXAxis, label="Time (s)", tag="ch3_x_axis")
                 dpg.add_plot_axis(dpg.mvYAxis, label="Voltage (V)", tag="ch3_y_axis")
-                
-                # Set y-axis limits
-                dpg.set_axis_limits("ch3_y_axis", -2.5, 2.5 )
                 
                 # Add horizontal line at 0V
                 dpg.add_line_series([0, 10], [0, 0], label="0V Reference", 
