@@ -11,7 +11,7 @@ import time
 import os
 from comms_mcu import rs485
 from comms_mcu.pic18f16q41_jm_ads131m04_comms import PIC18F16Q41_JM_ADS131M04_COMMS
-from daq_mcu.pico2_ads131m04 import PICO2_ADS131M04_DAQ
+from daq_mcu.pico2_daq_mcu_ads131m04 import PICO2_ADS131M04_DAQ
 from plot_function import plot_channels
 import struct
 
@@ -48,6 +48,7 @@ def main(sp, node_id):
     node.disable_external_trigger()
     
     # enable RTDP
+    #daq.set_RTDP_debug_mode(0) # Enable RTDP debug mode, which just sends 9999 to master instead of ADC
     daq.set_RTDP_timeout_us(1000) # 1 ms timeout: firmware minimum is 100 µs; actual 20 MHz
                                   # SPI transfer of 16 bytes takes ~10 µs, so 1 ms is valid.
 

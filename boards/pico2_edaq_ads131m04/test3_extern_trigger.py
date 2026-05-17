@@ -11,7 +11,7 @@ import time
 import os
 from comms_mcu import rs485
 from comms_mcu.pic18f16q41_jm_ads131m04_comms import PIC18F16Q41_JM_ADS131M04_COMMS
-from daq_mcu.pico2_ads131m04 import PICO2_ADS131M04_DAQ
+from daq_mcu.pico2_daq_mcu_ads131m04 import PICO2_ADS131M04_DAQ
 from plot_function import plot_channels
 import struct
 

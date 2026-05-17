@@ -11,7 +11,7 @@ import time
 import os
 from comms_mcu import rs485
 from comms_mcu.pic18f16q41_jm_ads131m04_comms import PIC18F16Q41_JM_ADS131M04_COMMS
-from daq_mcu.pico2_ads131m04 import PICO2_ADS131M04_DAQ
+from daq_mcu.pico2_daq_mcu_ads131m04 import PICO2_ADS131M04_DAQ
 
 import struct
 
@@ -21,8 +21,8 @@ def main(sp, node_id, fileName):
     print("SUPER-ADC ADS131M04 board monitor.")
     node1 = PIC18F16Q41_JM_ADS131M04_COMMS(node_id, sp)
     daq = PICO2_ADS131M04_DAQ(node1)
+    node1.reset_DAQ_MCU()
     print(node1.get_version())
-    #node1.reset_DAQ_MCU()
     #time.sleep(2)
     print(daq.get_version())
     print(daq.set_clk(8192))  # Set clock to 8192 kHz
