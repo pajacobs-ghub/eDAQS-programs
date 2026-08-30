@@ -82,6 +82,7 @@ class PICO2_ADS131M04_DAQ(object):
         that is determined by the ADS131M04 master clock frequency and
         the requested OSR.
         '''
+        print(f"{ANSI_GREEN} ADS131M04 > RTDP TIMEOUT: {dt_us}{ANSI_RESET}")
         ticks = int(dt_us)
         # [TODO] should put some checks on this.
         self._set_register(7, ticks)
