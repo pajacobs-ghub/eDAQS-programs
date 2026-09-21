@@ -2,6 +2,7 @@
 #
 # Peter J.
 # 2025-10-21: Adapted from pic18f16q41_comms_1_mcu code.
+# 2026-09-22: Introduce command_COMMS_MCU()
 #
 import argparse
 import time
@@ -23,24 +24,27 @@ class PIC18F16Q41_SPECTROMETER_COMMS(object):
         self.rs485_node = rs485.Node(id_char, serial_port)
         return
 
+    def command_COMMS_MCU(self, cmd_txt):
+        return self.rs485_node.command(cmd_txt)
+
     def get_version(self):
-        return self.rs485_node.command('v')
+        return self.command_COMMS_MCU('v')
 
     def suppress_LED(self):
-        return self.rs485_node.command('s')
+        return self.command_COMMS_MCU('s')
 
     def allow_LED(self):
-        return self.rs485_node.command('a')
+        return self.command_COMMS_MCU('a')
 
     def set_LED(self, val):
-        txt = self.rs485_node.command(f'L{val}')
+        txt = self.command_COMMS_MCU(f'L{val}')
         return
 
     def reset_DAQ_MCUs(self):
         """
         Sends command to reset all 5 AVR MCUs.
         """
-        txt = self.rs485_node.command('R')
+        txt = self.command_COMMS_MCU('R')
         return
 
     def command_DAQ_MCU(self, avr_id, cmd_bytes):
@@ -59,7 +63,7 @@ class PIC18F16Q41_SPECTROMETER_COMMS(object):
         '''
         cmd_txt = ''
         for i in cmd_bytes: cmd_txt += (' %d' % i)
-        txt = self.rs485_node.command('X %d %s' % (avr_id, cmd_txt))
+        txt = self.command_COMMS_MCU('X %d %s' % (avr_id, cmd_txt))
         # print('DEBUG txt=', txt)
         response_bytes = bytearray([int(item, 16) for item in txt.strip().split()])
         return response_bytes

@@ -3,6 +3,8 @@
 # Peter J.
 # 2025-10-21: Adapted from pic18f16q41_comms_1_mcu code.
 # 2025-11-05: Modified for Jeremy's SUPER-ADC ADS131M04 (Rev B or C) board.
+# 2026-09-22: Make better use of command_COMMS_MCU()
+
 import argparse
 import time
 import re
@@ -23,36 +25,39 @@ class PIC18F16Q41_JM_ADS131M04_COMMS(object):
         self.rs485_node = rs485.Node(id_char, serial_port)
         return
 
+    def command_COMMS_MCU(self, cmd_txt):
+        return self.rs485_node.command(cmd_txt)
+
     def get_version(self):
-        return self.rs485_node.command('v')
+        return self.command_COMMS_MCU('v')
 
     def set_LED(self, val):
-        txt = self.rs485_node.command(f'L{val}')
+        txt = self.command_COMMS_MCU(f'L{val}')
         return
 
     def assert_event_line_low(self):
-        txt = self.rs485_node.command('t')
+        txt = self.command_COMMS_MCU('t')
         return
 
     def release_event_line(self):
-        txt = self.rs485_node.command('z')
+        txt = self.command_COMMS_MCU('z')
         return
 
     def reset_DAQ_MCU(self):
-        txt = self.rs485_node.command('R')
+        txt = self.command_COMMS_MCU('R')
         return
 
     def flush_rx2_buffer(self):
-        txt = self.rs485_node.command('F')
+        txt = self.command_COMMS_MCU('F')
         return
 
     def test_DAQ_MCU_is_ready(self):
-        txt = self.rs485_node.command('Q')
+        txt = self.command_COMMS_MCU('Q')
         event_txt, ready_txt, = txt.split()
         return ready_txt == '1'
 
     def test_event_has_passed(self):
-        txt = self.rs485_node.command('Q')
+        txt = self.command_COMMS_MCU('Q')
         event_txt, ready_txt, = txt.split()
         return event_txt == '0'
 
@@ -77,19 +82,16 @@ class PIC18F16Q41_JM_ADS131M04_COMMS(object):
         options = {'positive': 1, 'pos':1, '1':1, 1:1,
                    'negative':0, 'neg':0, '0':0, 0:0}
         slope = options[slope]
-        txt = self.rs485_node.command(f'e {level} {slope}')
+        txt = self.command_COMMS_MCU(f'e {level} {slope}')
         if txt.find('error') >= 0:
             raise RuntimeError('Could not set external trigger.')
         return
 
     def disable_external_trigger(self):
         # Use direct COMMS-MCU command
-        txt = self.rs485_node.command('d')
+        txt = self.command_COMMS_MCU('d')
         return
-    
-    def command_COMMS_MCU(self, cmd_txt):
-        return self.rs485_node.command(cmd_txt)
-    
+
     def command_DAQ_MCU(self, cmd_txt):
         '''
         Wraps the cmd_txt as a pass-through-command and sends it.
@@ -98,7 +100,7 @@ class PIC18F16Q41_JM_ADS131M04_COMMS(object):
         All interaction with the DAQ-MCU is via these messages
         to the COMMS-MCU.
         '''
-        txt = self.rs485_node.command('X%s' % cmd_txt)
+        txt = self.command_COMMS_MCU('X%s' % cmd_txt)
         t = txt.strip()
         # Expect the COMMS MCU to echo the inner DAQ command char, e.g. 'v v0.3 ...'
         if len(cmd_txt) > 0 and len(t) > 0 and t[0] == cmd_txt[0]:
@@ -107,10 +109,10 @@ class PIC18F16Q41_JM_ADS131M04_COMMS(object):
             raise RuntimeError(f'DAQ_MCU error: {t}')
         # Fallback: return as-is
         return t
-    
+
     def debug_COMMS(self):
         # Debug: Query CLC and comparator states
-        return self.rs485_node.command('D')
+        return self.command_COMMS_MCU('D')
 
 
 if __name__ == '__main__':
