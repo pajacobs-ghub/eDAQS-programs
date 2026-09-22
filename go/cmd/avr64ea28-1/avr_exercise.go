@@ -56,24 +56,31 @@ func main() {
 	}
 	// Keep a single byte for the node identity.
 	id := []byte(*nodeId)[0]
-	node := edaqs.NewCOMMS_1_MCU(&port, id)
+	comms_mcu := edaqs.NewCOMMS_1_MCU(&port, id)
+	daq_mcu := edaqs.NewAVR_DAQ_MCU(comms_mcu)
 	//
 	switch *itest {
 	case 1:
-		test_1_simple_interaction(node)
+		test_1_simple_interaction(comms_mcu, daq_mcu)
 	default:
 		fmt.Printf("No test selected.")
 	}
 	fmt.Println("Done.")
 }
 
-func test_1_simple_interaction(node *edaqs.COMMS_1_MCU) {
+func test_1_simple_interaction(comms_mcu *edaqs.COMMS_1_MCU, daq_mcu *edaqs.AVR_DAQ_MCU) {
 	fmt.Println("Begin Test 1 Simple Interaction...")
-	responseBytes, err := node.GetVersion()
+	responseBytes, err := comms_mcu.GetVersion()
 	if err != nil {
 		log.Printf("error getting version from COMMS_MCU: %v", err)
 	} else {
 		fmt.Printf("COMMS_1_MCU version string: %v\n", string(responseBytes))
+	}
+	response2Bytes, err := daq_mcu.GetVersion()
+	if err != nil {
+		log.Printf("error getting version from DAQ_MCU: %v", err)
+	} else {
+		fmt.Printf("DAQ_MCU version string: %v\n", string(response2Bytes))
 	}
 	return
 }

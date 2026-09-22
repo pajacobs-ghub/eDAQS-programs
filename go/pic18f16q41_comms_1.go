@@ -1,5 +1,5 @@
 // file: pic18f16q41_comms_1.go
-// Service functions for the communications MCU.
+// Service functions for the communications MCU, which is a node on the RS485 bus.
 //
 // Peter J.
 // 2026-09-22: Started rebuilding from the Python functions.
@@ -64,5 +64,25 @@ func (node *COMMS_1_MCU) command_COMMS_MCU(btext []byte) (resp []byte, err error
 
 func (node *COMMS_1_MCU) GetVersion() (resp []byte, err error) {
 	resp, err = node.command_COMMS_MCU([]byte("v"))
+	return
+}
+
+// All interaction with the DAQ-MCU is via messages to the COMMS-MCU.
+//
+// Wraps the cmd_txt as a pass-through-command and sends it.
+// Returns the unwrapped response text, if the response is ok.
+func (node *COMMS_1_MCU) command_DAQ_MCU(btext []byte) (resp []byte, err error) {
+	wholeCmd := bytes.Join([][]byte{[]byte("X"), btext}, []byte(""))
+	resp, err = node.command_COMMS_MCU(wholeCmd)
+	if err != nil {
+		return
+	}
+	// Extract the good part of the DAQ_MCU response.
+	resp = bytes.Trim(resp, " ")
+	var found_ok bool
+	resp, found_ok = bytes.CutSuffix(resp, []byte("ok"))
+	if found_ok == false {
+		err = fmt.Errorf("DAC_MCU response not ok: %s", resp)
+	}
 	return
 }
