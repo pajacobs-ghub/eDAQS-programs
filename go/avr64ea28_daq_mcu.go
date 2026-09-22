@@ -25,7 +25,7 @@ func NewAVR_DAQ_MCU(comms_mcu *COMMS_1_MCU) *AVR_DAQ_MCU {
 	}
 }
 
-func (daq_mcu *AVR_DAQ_MCU) GetVersion() (resp []byte, err error) {
-	resp, err = daq_mcu.comms_mcu.command_DAQ_MCU([]byte("v"))
+func (my *AVR_DAQ_MCU) GetVersion() (resp []byte, err error) {
+	resp, err = my.comms_mcu.command_DAQ_MCU([]byte("v"))
 	return
 }

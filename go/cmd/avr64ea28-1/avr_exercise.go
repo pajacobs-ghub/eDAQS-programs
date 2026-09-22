@@ -74,7 +74,7 @@ func test_1_simple_interaction(comms_mcu *edaqs.COMMS_1_MCU, daq_mcu *edaqs.AVR_
 	if err != nil {
 		log.Printf("error getting version from COMMS_MCU: %v", err)
 	} else {
-		fmt.Printf("COMMS_1_MCU version string: %v\n", string(responseBytes))
+		fmt.Printf("COMMS_MCU version string: %v\n", string(responseBytes))
 	}
 	response2Bytes, err := daq_mcu.GetVersion()
 	if err != nil {
