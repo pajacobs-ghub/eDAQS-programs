@@ -1,4 +1,4 @@
-module simple_term
+module example.com/edaqs
 
 go 1.24.1
 

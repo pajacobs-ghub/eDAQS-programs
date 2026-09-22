@@ -10,42 +10,14 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"flag"
 	"fmt"
 	"go.bug.st/serial"
 	"log"
 	"os"
+	edaqs "example.com/edaqs"
 	"time"
 )
-
-func wrap(txt []byte, id byte) (msg []byte) {
-	s := [][]byte{[]byte("/"), []byte{id,}, txt, []byte("!")}
-	return bytes.Join(s, []byte(""))
-}
-
-func unwrap(msg []byte) (txt []byte, id byte, err error) {
-	txt = bytes.TrimSpace(msg)
-	id = byte('0')
-	err = nil
-	if len(txt) == 0 {
-		err = fmt.Errorf("empty message, %v", msg)
-		return
-	}
-	islash := bytes.IndexByte(txt, byte('/'))
-	ihash := bytes.IndexByte(txt, byte('#'))
-	if islash < 0 || ihash < 0 {
-		err = fmt.Errorf("message missing delimiter: %v", msg)
-		return
-	}
-	if ihash <= islash+2 {
-		err = fmt.Errorf("message missing content: %v", msg)
-		return
-	}
-	id = msg[islash+1]
-	txt = msg[islash+2:ihash]
-	return
-}
 
 func main() {
 	fmt.Println("Begin simple RS485 terminal program...")
@@ -93,6 +65,7 @@ func main() {
 	}
 	// Keep a single byte for the node identity.
 	id := []byte(*nodeId)[0]
+	node := edaqs.NewRS485Node(&port, id)
 	//
 	// The main loop gets a line of text from the console and
 	// sends it to the RS485 bus via the PC's serial port.
@@ -111,39 +84,28 @@ func main() {
 	fmt.Println("Enter commands to send on the RS485 bus.")
 	fmt.Println("Press Ctrl-C to interrupt and quit program.")
 	kbdScanner := bufio.NewScanner(os.Stdin)
-	bufferedPort := bufio.NewReader(port)
 	for kbdScanner.Scan() {
 		btext := kbdScanner.Bytes()
 		if len(btext) > 0 {
-			if *wrapMessages {
-				btext = wrap(btext, id)
-			}
 			fmt.Printf("Command: %v\n", string(btext))
-			n, err := port.Write(btext)
-			if err != nil {
-				log.Fatal(err)
+			var n int
+			if *wrapMessages {
+				n, err = node.SendMessage(btext)
+			} else {
+				n, err = node.SendRawMessage(btext)
 			}
-			_, err = port.Write([]byte("\n"))
 			if err != nil {
-				log.Fatal(err)
-			}
-			if err = port.Drain(); err != nil {
-				log.Fatal(err)
+				log.Printf("error sending message: %v\n", err)
 			}
 			fmt.Printf("Sent %v bytes followed by newline\n", n)
 			//
-			responseBytes, err := bufferedPort.ReadBytes('\n')
-			if err != nil {
-				fmt.Printf("Error: %v\n", err)
+			var responseBytes []byte
+			if *wrapMessages {
+				responseBytes, _, err = node.FetchResponse()
 			} else {
-				if *wrapMessages {
-					responseBytes, _, err = unwrap(responseBytes)
-					if err != nil {
-						log.Printf("could not unwrap message: %v\n", err)
-					}
-				}
-				fmt.Printf("Response: %v\n", string(responseBytes))
+				responseBytes, err = node.FetchRawResponse()
 			}
+			fmt.Printf("Response: %v\n", string(responseBytes))
 		}
 	}
 	fmt.Println("Done.")
