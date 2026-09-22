@@ -1,4 +1,24 @@
 // file: rs485.go
+// Basic functions for sending and receiving messages across the RS485 bus.
+//
+// The RS485 communication happens through a standard serial port
+// and we use the go.bug.st/serial package to manage that port.
+//
+// Each node on the RS485 bus should listen to all messages but
+// accept and act only on the messages addressed to their id.
+// The controlling node (master) has id character b'0'.
+// Other nodes may be '1', '2', ... 'A' .. 'Z', 'a' .. 'z'.
+//
+// Command messages are of the form: /<id><message text>!\n
+// where <id> is the single byte identity of the target node.
+// Response messages are of the form: /0<message text>#\n
+// where 0 is the byte identity of the master node (a personal computer, say).
+// Details of the message text is specific to each model of node.
+//
+// For further notes, see PJ's workbook page 76, 2024-01-09.
+//
+// Peter J.
+// 2026-09-22 functions extracted from the simple-terminal program.
 
 package edaqs
 

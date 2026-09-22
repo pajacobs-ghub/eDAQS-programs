@@ -1,6 +1,6 @@
 module example.com/edaqs
 
-go 1.24.1
+go 1.27.0
 
 require go.bug.st/serial v1.6.2
 
