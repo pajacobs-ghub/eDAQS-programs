@@ -59,21 +59,21 @@ func unwrap(msg []byte) (txt []byte, id byte, err error) {
 }
 
 type RS485Node struct {
-	port *serial.Port
-	id byte
-	bufferedReader *bufio.Reader
+	Port *serial.Port
+	Id byte
+	BufferedReader *bufio.Reader
 }
 
 func NewRS485Node(sp *serial.Port, id byte) *RS485Node {
 	return &RS485Node{
-		port: sp,
-		id: id,
-		bufferedReader: bufio.NewReader(*sp),
+		Port: sp,
+		Id: id,
+		BufferedReader: bufio.NewReader(*sp),
 	}
 }
 
 func (node *RS485Node) SendRawMessage(btext []byte) (n int, err error) {
-	port := *node.port
+	port := *node.Port
 	n, err = port.Write(btext)
 	if err != nil {
 		log.Fatal(err)
@@ -89,13 +89,13 @@ func (node *RS485Node) SendRawMessage(btext []byte) (n int, err error) {
 }
 
 func (node *RS485Node) SendMessage(btext []byte) (n int, err error) {
-	btext = wrap(btext, node.id)
+	btext = wrap(btext, node.Id)
 	n, err = node.SendRawMessage(btext)
 	return
 }
 
 func (node *RS485Node) FetchRawResponse() (btext []byte, err error) {
-	btext, err = node.bufferedReader.ReadBytes('\n')
+	btext, err = node.BufferedReader.ReadBytes('\n')
 	if err != nil {
 		log.Printf("fetch response error: %v\n", err)
 	}

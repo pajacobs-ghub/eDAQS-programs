@@ -10,7 +10,8 @@ import (
 	"fmt"
 	"go.bug.st/serial"
 	"log"
-	edaqs "example.com/edaqs"
+	comms "example.com/edaqs/pic18f16q41_comms_1"
+	daq "example.com/edaqs/avr64ea28_daq_mcu"
 	"time"
 )
 
@@ -56,8 +57,8 @@ func main() {
 	}
 	// Keep a single byte for the node identity.
 	id := []byte(*nodeId)[0]
-	comms_mcu := edaqs.NewCOMMS_1_MCU(&port, id)
-	daq_mcu := edaqs.NewAVR_DAQ_MCU(comms_mcu)
+	comms_mcu := comms.NewCOMMS_1_MCU(&port, id)
+	daq_mcu := daq.NewAVR_DAQ_MCU(comms_mcu)
 	//
 	switch *itest {
 	case 1:
@@ -68,7 +69,7 @@ func main() {
 	fmt.Println("Done.")
 }
 
-func ex_1_simple_interaction(comms_mcu *edaqs.COMMS_1_MCU, daq_mcu *edaqs.AVR_DAQ_MCU) {
+func ex_1_simple_interaction(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.AVR_DAQ_MCU) {
 	fmt.Println("Begin Test 1 Simple Interaction...")
 	responseBytes, err := comms_mcu.GetVersion()
 	if err != nil {

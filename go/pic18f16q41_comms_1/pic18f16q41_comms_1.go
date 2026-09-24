@@ -5,7 +5,7 @@
 // 2026-09-22: Started rebuilding from the Python functions.
 //
 
-package edaqs
+package pic18f16q41_comms_1
 
 import (
 	"bufio"
@@ -13,17 +13,18 @@ import (
 	"fmt"
 	"go.bug.st/serial"
 	"log"
+	edaqs "example.com/edaqs"
 )
 
 type COMMS_1_MCU struct {
-	RS485Node
+	edaqs.RS485Node
 }
 
 func NewCOMMS_1_MCU(sp *serial.Port, id byte) *COMMS_1_MCU {
 	return &COMMS_1_MCU{
-		port: sp,
-		id: id,
-		bufferedReader: bufio.NewReader(*sp),
+		Port: sp,
+		Id: id,
+		BufferedReader: bufio.NewReader(*sp),
 	}
 }
 
@@ -37,7 +38,7 @@ func NewCOMMS_1_MCU(sp *serial.Port, id byte) *COMMS_1_MCU {
 // and may have more text following that character.
 // A command that is not successful should send back a message
 // with the word "error" in it, together with some more information.
-func (node *COMMS_1_MCU) command_COMMS_MCU(btext []byte) (resp []byte, err error) {
+func (node *COMMS_1_MCU) Command_COMMS_MCU(btext []byte) (resp []byte, err error) {
 	cmdByte := btext[0]
 	_, err = node.SendMessage(btext)
 	if err != nil {
@@ -63,7 +64,7 @@ func (node *COMMS_1_MCU) command_COMMS_MCU(btext []byte) (resp []byte, err error
 }
 
 func (node *COMMS_1_MCU) GetVersion() (resp []byte, err error) {
-	resp, err = node.command_COMMS_MCU([]byte("v"))
+	resp, err = node.Command_COMMS_MCU([]byte("v"))
 	return
 }
 
@@ -71,9 +72,9 @@ func (node *COMMS_1_MCU) GetVersion() (resp []byte, err error) {
 //
 // Wraps the cmd_txt as a pass-through-command and sends it.
 // Returns the unwrapped response text, if the response is ok.
-func (node *COMMS_1_MCU) command_DAQ_MCU(btext []byte) (resp []byte, err error) {
+func (node *COMMS_1_MCU) Command_DAQ_MCU(btext []byte) (resp []byte, err error) {
 	wholeCmd := bytes.Join([][]byte{[]byte("X"), btext}, []byte(""))
-	resp, err = node.command_COMMS_MCU(wholeCmd)
+	resp, err = node.Command_COMMS_MCU(wholeCmd)
 	if err != nil {
 		return
 	}
