@@ -50,18 +50,18 @@ func main() {
 	//
 	timeOut, err := time.ParseDuration(*timeStr)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to parse timeout: ", err)
 	}
 	mode := &serial.Mode{
 		BaudRate: *baud,
 	}
 	port, err := serial.Open(*portName, mode)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to open serial port: ", err)
 	}
 	err = port.SetReadTimeout(timeOut)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to set timeout: ", err)
 	}
 	// Keep a single byte for the node identity.
 	id := []byte(*nodeId)[0]
