@@ -89,5 +89,23 @@ func ex_1_simple_interaction(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.AVR_DAQ_
 	} else {
 		fmt.Printf("number of registers in AVR: %d\n", nreg)
 	}
+	_ = daq_mcu.SetRegistersToFactoryValues()
+	val, _ := daq_mcu.GetRegValue(daq.PER_TICKS)
+	fmt.Printf("before setting, period_ticks: %d\n", val)
+	_, err = daq_mcu.SetRegValue(daq.PER_TICKS, 99)
+	if err != nil {
+		log.Printf("error while setting register: %v\n", err)
+	}
+	regs := []daq.RegIndex{daq.PER_TICKS, daq.NCHANNELS}
+	vals, _ := daq_mcu.GetRegValues(regs)
+	fmt.Printf("after setting, register values: %v %v\n", regs, vals)
+	pairs := map[daq.RegIndex]int{daq.PER_TICKS: 88, daq.NCHANNELS: 4}
+	fmt.Println("Try setting via map")
+	err = daq_mcu.SetRegValues(pairs)
+	if err != nil {
+		log.Printf("%v", err)
+	}
+	vals, _ = daq_mcu.GetRegValues(regs)
+	fmt.Printf("after setting via map, register values: %v %v\n", regs, vals)
 	return
 }

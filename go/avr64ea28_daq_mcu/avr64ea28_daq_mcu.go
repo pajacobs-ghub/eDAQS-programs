@@ -40,3 +40,58 @@ func (my *AVR_DAQ_MCU) GetNRegActual() (nreg uint, err error) {
 	}
 	return
 }
+
+func (my *AVR_DAQ_MCU) SetRegistersToFactoryValues() (err error) {
+	_, err = my.comms_mcu.Command_DAQ_MCU([]byte("F"))
+	return
+}
+
+func (my *AVR_DAQ_MCU) GetRegValue(i RegIndex) (val int, err error) {
+	cmd := fmt.Sprintf("r %d", i)
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte(cmd))
+	if err == nil {
+		_, err = fmt.Sscanf(string(resp), "%d", &val)
+	}
+	return
+}
+
+func (my *AVR_DAQ_MCU) GetRegValues(indices []RegIndex) (vals []int, err error) {
+	for _, i := range indices {
+		var val int
+		val, err = my.GetRegValue(i)
+		if err != nil {
+			err = fmt.Errorf("error while getting reg[%d]: %w", i, err)
+			return
+		}
+		vals = append(vals, val)
+	}
+	return
+}
+
+func (my *AVR_DAQ_MCU) SetRegValue(i RegIndex, val int) (val2 int, err error) {
+	cmd := fmt.Sprintf("s %d %d", i, val)
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte(cmd))
+	if err == nil {
+		var i2 int
+		_, err = fmt.Sscanf(string(resp), "reg[%d] %d", &i2, &val2)
+		if err == nil {
+			if RegIndex(i2) != i || val != val2 {
+				err = fmt.Errorf("returned numbers not consistent: %d!=%d or %d!=%d", i, i2, val, val2)
+			}
+		}
+	}
+	return
+}
+
+func (my *AVR_DAQ_MCU) SetRegValues(pairs map[RegIndex]int) (err error) {
+	for i, val := range pairs {
+		_, err = my.SetRegValue(i, val)
+		if err != nil {
+			err = fmt.Errorf("error while setting reg[%d]: %w", err)
+			return
+		}
+	}
+	return
+}
