@@ -83,10 +83,12 @@ func (node *RS485Node) SendRawMessage(btext []byte) (n int, err error) {
 		err = fmt.Errorf("error sending newline char: %w", err)
 		return
 	}
+	/* Let's not Drain the buffer, so that we avoid the occasional interrupted system call.
 	if err = port.Drain(); err != nil {
 		err = fmt.Errorf("error draining serial port buffer: %w", err)
 		return
 	}
+	*/
 	return
 }
 
