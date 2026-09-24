@@ -27,7 +27,6 @@ import (
 	"bytes"
 	"fmt"
 	"go.bug.st/serial"
-	"log"
 )
 
 func wrap(txt []byte, id byte) (msg []byte) {
@@ -76,14 +75,17 @@ func (node *RS485Node) SendRawMessage(btext []byte) (n int, err error) {
 	port := *node.Port
 	n, err = port.Write(btext)
 	if err != nil {
-		log.Fatal(err)
+		err = fmt.Errorf("error trying to send raw message: %w", err)
+		return
 	}
 	_, err = port.Write([]byte("\n"))
 	if err != nil {
-		log.Fatal(err)
+		err = fmt.Errorf("error sending newline char: %w", err)
+		return
 	}
 	if err = port.Drain(); err != nil {
-		log.Fatal(err)
+		err = fmt.Errorf("error draining serial port buffer: %w", err)
+		return
 	}
 	return
 }
@@ -97,18 +99,20 @@ func (node *RS485Node) SendMessage(btext []byte) (n int, err error) {
 func (node *RS485Node) FetchRawResponse() (btext []byte, err error) {
 	btext, err = node.BufferedReader.ReadBytes('\n')
 	if err != nil {
-		log.Printf("fetch response error: %v\n", err)
+		err = fmt.Errorf("error fetching raw response: %w", err)
 	}
 	return
 }
 
 func (node *RS485Node) FetchResponse() (btext []byte, id byte, err error) {
 	btext, err = node.FetchRawResponse()
-	if err == nil {
-		btext, id, err = unwrap(btext)
-		if err != nil {
-			log.Printf("could not unwrap message: %v\n", err)
-		}
+	if err != nil {
+		err = fmt.Errorf("error fetching response: %w", err)
+		return
+	}
+	btext, id, err = unwrap(btext)
+	if err != nil {
+		err = fmt.Errorf("error unwrapping message: %w", err)
 	}
 	return
 }
