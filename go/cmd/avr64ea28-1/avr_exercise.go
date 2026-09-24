@@ -41,18 +41,18 @@ func main() {
 	//
 	timeOut, err := time.ParseDuration(*timeStr)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to parse timeout: ", err)
 	}
 	mode := &serial.Mode{
 		BaudRate: *baud,
 	}
 	port, err := serial.Open(*portName, mode)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to open serial port: ", err)
 	}
 	err = port.SetReadTimeout(timeOut)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to set timeout: ", err)
 	}
 	// Keep a single byte for the node identity.
 	id := []byte(*nodeId)[0]
@@ -61,26 +61,32 @@ func main() {
 	//
 	switch *itest {
 	case 1:
-		test_1_simple_interaction(comms_mcu, daq_mcu)
+		ex_1_simple_interaction(comms_mcu, daq_mcu)
 	default:
-		fmt.Printf("No test selected.")
+		fmt.Println("No test selected.")
 	}
 	fmt.Println("Done.")
 }
 
-func test_1_simple_interaction(comms_mcu *edaqs.COMMS_1_MCU, daq_mcu *edaqs.AVR_DAQ_MCU) {
+func ex_1_simple_interaction(comms_mcu *edaqs.COMMS_1_MCU, daq_mcu *edaqs.AVR_DAQ_MCU) {
 	fmt.Println("Begin Test 1 Simple Interaction...")
 	responseBytes, err := comms_mcu.GetVersion()
 	if err != nil {
-		log.Printf("error getting version from COMMS_MCU: %v", err)
+		log.Printf("error getting version from COMMS_MCU: %v\n", err)
 	} else {
 		fmt.Printf("COMMS_MCU version string: %v\n", string(responseBytes))
 	}
 	response2Bytes, err := daq_mcu.GetVersion()
 	if err != nil {
-		log.Printf("error getting version from DAQ_MCU: %v", err)
+		log.Printf("error getting version from DAQ_MCU: %v\n", err)
 	} else {
 		fmt.Printf("DAQ_MCU version string: %v\n", string(response2Bytes))
+	}
+	nreg, err := daq_mcu.GetNRegActual()
+	if err != nil {
+		log.Printf("error getting actual number of registers: %v\n", err)
+	} else {
+		fmt.Printf("number of registers in AVR: %d\n", nreg)
 	}
 	return
 }
