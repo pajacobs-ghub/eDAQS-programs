@@ -83,6 +83,31 @@ func ex_1_simple_interaction(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.AVR_DAQ_
 	} else {
 		fmt.Printf("DAQ_MCU version string: %v\n", string(response2Bytes))
 	}
+	//
+	// Light up the LED for 2 seconds
+	err = comms_mcu.SetLED(1)
+	time.Sleep(2 * time.Second)
+	err = comms_mcu.SetLED(0)
+	//
+	if eventFlag, err := comms_mcu.Check_EventHasPassed(); err == nil {
+		if eventFlag {
+			fmt.Println("Event has occurred.")
+		} else {
+			fmt.Println("Event has not occurred.")
+		}
+	} else {
+		log.Println("Failed to read Event flag.")
+	}
+	if daqReadyFlag, err := comms_mcu.Check_DAQ_MCU_Ready(); err == nil {
+		if daqReadyFlag {
+			fmt.Println("DAQ MCU is ready.")
+		} else {
+			fmt.Println("DAQ MCU is busy.")
+		}
+	} else {
+		log.Println("Failed to read DAQ_MCU Ready flag.")
+	}
+	//
 	nreg, err := daq_mcu.GetNRegActual()
 	if err != nil {
 		log.Printf("error getting actual number of registers: %v\n", err)

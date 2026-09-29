@@ -87,3 +87,55 @@ func (node *COMMS_1_MCU) Command_DAQ_MCU(btext []byte) (resp []byte, err error) 
 	}
 	return
 }
+
+func (node *COMMS_1_MCU) SetLED(val uint) (err error) {
+	wholeCmd := fmt.Sprintf("L%d", val)
+	_, err = node.Command_COMMS_MCU([]byte(wholeCmd))
+	return
+}
+
+func (node *COMMS_1_MCU) AssertEventLineLow() (err error) {
+	_, err = node.Command_COMMS_MCU([]byte("t"))
+	return
+}
+
+func (node *COMMS_1_MCU) ReleaseEventLine() (err error) {
+	_, err = node.Command_COMMS_MCU([]byte("z"))
+	return
+}
+
+func (node *COMMS_1_MCU) Reset_DAQ_MCU() (err error) {
+	_, err = node.Command_COMMS_MCU([]byte("R"))
+	return
+}
+
+func (node *COMMS_1_MCU) FlushRX2Buffer() (err error) {
+	_, err = node.Command_COMMS_MCU([]byte("F"))
+	return
+}
+
+func (node *COMMS_1_MCU) Check_DAQ_MCU_Ready() (ready bool, err error) {
+	var resp []byte
+	resp, err = node.Command_COMMS_MCU([]byte("Q"))
+	if err != nil {
+		return
+	}
+	var ievent, iready int
+	_, err = fmt.Sscanf(string(resp), "%d %d", &ievent, &iready)
+	ready = iready == 1
+	_ = ievent
+	return
+}
+
+func (node *COMMS_1_MCU) Check_EventHasPassed() (passed bool, err error) {
+	var resp []byte
+	resp, err = node.Command_COMMS_MCU([]byte("Q"))
+	if err != nil {
+		return
+	}
+	var ievent, iready int
+	_, err = fmt.Sscanf(string(resp), "%d %d", &ievent, &iready)
+	passed = ievent == 0
+	_ = iready
+	return
+}
