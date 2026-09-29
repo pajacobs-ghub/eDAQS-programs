@@ -272,6 +272,11 @@ class AVR64EA28_DAQ_MCU(object):
         self.set_reg(9, refVsel)
         return
 
+    def get_analog_ref_voltage(self):
+        '''
+        '''
+        return self.ref_voltages_int_to_value[self.get_reg(9)]
+
     def get_burst_samples(self):
         return 2**self.get_AVR_reg(34)
 
@@ -291,11 +296,6 @@ class AVR64EA28_DAQ_MCU(object):
             log2n = 0
         self.set_reg(34, log2n)
         return
-
-    def get_analog_ref_voltage(self):
-        '''
-        '''
-        return self.ref_voltages_int_to_value[self.get_reg(9)]
 
     def set_differential_conversion(self):
         '''
