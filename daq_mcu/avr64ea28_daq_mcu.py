@@ -237,7 +237,7 @@ class AVR64EA28_DAQ_MCU(object):
             self.channels.append((self.pins[pos], self.pins[neg]))
         nchan = len(self.channels)
         self.set_reg_by_name('NCHANNELS', nchan)
-        base = self.reg_labels_to_int('CH0+')
+        base = self.reg_labels_to_int['CH0+']
         for i in range(nchan):
             self.set_reg(base+i*2, self.channels[i][0])
             self.set_reg(base+1+i*2, self.channels[i][1])
