@@ -9,6 +9,7 @@ package avr64ea28_daq_mcu
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	comms "example.com/edaqs/pic18f16q41_comms_1"
 )
@@ -209,6 +210,12 @@ func (my *AVR_DAQ_MCU) GetAnalogRefVoltage() (vref RefVoltage, err error) {
 	return
 }
 
+// The number of analog samples per conversion result is 2**n.
+//
+// Note that when setting this number nonzero,
+// we will get conversion results that are 16 times
+// the nominal 12-bit value because we have elected
+// to use burst-mode with result scaling.
 func (my *AVR_DAQ_MCU) SetBurst(acc SampleAccumulation) (err error) {
 	err = my.SetRegValue(NBURST, int(acc))
 	if err != nil {
@@ -238,3 +245,22 @@ func (my *AVR_DAQ_MCU) SetSingleSidedConversion() (err error) {
 	return
 }
 
+func (my *AVR_DAQ_MCU) ImmediateSampleSet() (vals []int, err error) {
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("I"))
+	if err != nil {
+		err = fmt.Errorf("error getting immediate sample set: %w", err)
+		return
+	}
+	items := strings.Fields(string(resp))
+	n := len(items)
+	vals = make([]int, n)
+	for i := 0; i < n; i++ {
+		vals[i], err = strconv.Atoi(items[i])
+		if err != nil {
+			err = fmt.Errorf("error while getting immediate sample set, converting %s to int: %w", err)
+			return
+		}
+	}
+	return
+}
