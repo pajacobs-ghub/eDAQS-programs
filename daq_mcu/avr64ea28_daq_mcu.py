@@ -160,6 +160,9 @@ class AVR64EA28_DAQ_MCU(object):
         txt = self.comms_MCU.command_DAQ_MCU(f'r {i}')
         return int(txt)
 
+    def get_reg_by_name(self, name):
+        return self.get_reg(self.reg_labels_to_int[name])
+
     def set_reg(self, i, val):
         '''
         Sets the value of the i-th virtual-register and
@@ -170,6 +173,9 @@ class AVR64EA28_DAQ_MCU(object):
             raise RuntimeError(f'Setting register {i} but n_reg_actual is {n_reg_actual}.')
         txt = self.comms_MCU.command_DAQ_MCU(f's {i} {val}')
         return int(txt.split()[1])
+
+    def set_reg_by_name(self, name, val):
+        return self.set_reg(self.reg_labels_to_int[name], val)
 
     def set_regs_to_factory_values(self):
         txt = self.comms_MCU.command_DAQ_MCU('F')
@@ -208,14 +214,14 @@ class AVR64EA28_DAQ_MCU(object):
         '''
         ticks = int(dt_us / self.us_per_tick)
         # [TODO] should put some checks on this.
-        self.set_reg(0, ticks)
+        self.set_reg_by_name('PER_TICKS', ticks)
         return
 
     def get_sample_period_us(self):
         '''
         Returns sample period in microseconds.
         '''
-        return self.get_reg(0) * self.us_per_tick
+        return self.get_reg_by_name('PER_TICKS') * self.us_per_tick
 
     def set_analog_channels(self, chan_list):
         '''
@@ -230,34 +236,35 @@ class AVR64EA28_DAQ_MCU(object):
             if type(neg) is str: neg = neg.upper()
             self.channels.append((self.pins[pos], self.pins[neg]))
         nchan = len(self.channels)
-        self.set_reg(1, nchan)
+        self.set_reg_by_name('NCHANNELS', nchan)
+        base = self.reg_labels_to_int('CH0+')
         for i in range(nchan):
-            self.set_reg(10+i*2, self.channels[i][0])
-            self.set_reg(11+i*2, self.channels[i][1])
+            self.set_reg(base+i*2, self.channels[i][0])
+            self.set_reg(base+1+i*2, self.channels[i][1])
         return
 
     def set_PGA(self, gain='8X'):
         '''
         '''
-        self.set_reg(7, 1) # via PGA
-        self.set_reg(8, self.pga_gains[gain])
+        self.set_reg_by_name('PGA_FLAG', 1) # via PGA
+        self.set_reg_by_name('PGA_GAIN', self.pga_gains[gain])
         return
 
     def clear_PGA(self):
         '''
         '''
-        self.set_reg(7, 0) # direct
-        self.set_reg(8, 0) # 1X
+        self.set_reg_by_name('PGA_FLAG', 0) # direct
+        self.set_reg_by_name('PGA_GAIN', 0) # 1X
         return
 
     def get_analog_gain(self):
         '''
         '''
-        pga_flag = self.get_reg(7)
+        pga_flag = self.get_reg_by_name('PGA_GAIN')
         if pga_flag == 0:
             return 1
         elif pga_flag == 1:
-            return self.pga_gains_int_to_value[self.get_reg(8)]
+            return self.pga_gains_int_to_value[self.get_reg_by_name('PGA_GAIN')]
 
     def set_analog_ref_voltage(self, vStr):
         '''
@@ -269,20 +276,20 @@ class AVR64EA28_DAQ_MCU(object):
             refVsel = self.ref_voltages[vStr]
         except:
             refVsel = self.ref_voltages['4v096']
-        self.set_reg(9, refVsel)
+        self.set_reg_by_name('V_REF', refVsel)
         return
 
     def get_analog_ref_voltage(self):
         '''
         '''
-        return self.ref_voltages_int_to_value[self.get_reg(9)]
+        return self.ref_voltages_int_to_value[self.get_reg_by_name('V_REF')]
 
     def get_burst_samples(self):
-        return 2**self.get_AVR_reg(34)
+        return 2**self.get_reg_by_name('NBURST')
 
     def set_burst(self, n):
         '''
-        The number of samples per conversion is 2**n.
+        The number of analog samples per conversion result is 2**n.
 
         Note that when setting this number nonzero,
         we will get conversion results that are 16 times
@@ -294,19 +301,19 @@ class AVR64EA28_DAQ_MCU(object):
             log2n = self.sample_accumulation_number[n]
         except:
             log2n = 0
-        self.set_reg(34, log2n)
+        self.set_reg_by_name('NBURST', log2n)
         return
 
     def set_differential_conversion(self):
         '''
         '''
-        self.set_reg(35, 1)
+        self.set_reg_by_name('DIFF_CONV', 1)
         return
 
     def set_single_sided_conversion(self):
         '''
         '''
-        self.set_reg(35, 0)
+        self.set_reg_by_name('DIFF_CONV', 0)
         return
 
     def immediate_sample_set(self):
@@ -322,7 +329,7 @@ class AVR64EA28_DAQ_MCU(object):
         Recording will start immediately that the MCU is told to start sampling
         and will stop after nsamples have been recorded.
         '''
-        self.set_reg(3, self.trigger_modes['IMMEDIATE'])
+        self.set_reg_by_name('TRIG_MODE', self.trigger_modes['IMMEDIATE'])
         return
 
     def set_trigger_internal(self, chan, level, slope):
@@ -335,10 +342,10 @@ class AVR64EA28_DAQ_MCU(object):
         nsamples with then be recorded and the sampling stops.
         '''
         # [TODO] some checking for reasonable input.
-        self.set_reg(3, self.trigger_modes['INTERNAL'])
-        self.set_reg(4, chan)
-        self.set_reg(5, level)
-        self.set_reg(6, self.trigger_slopes[slope])
+        self.set_reg_by_name('TRIG_MODE', self.trigger_modes['INTERNAL'])
+        self.set_reg_by_name('TRIG_CHAN', chan)
+        self.set_reg_by_name('TRIG_LEVEL', level)
+        self.set_reg_by_name('TRIG_SLOPE', self.trigger_slopes[slope])
         return
 
     def set_trigger_external(self):
@@ -349,7 +356,7 @@ class AVR64EA28_DAQ_MCU(object):
         and will continue indefinitely, until the EVENT# pin goes low.
         nsamples with then be recorded and the sampling stops.
         '''
-        self.set_reg(3, self.trigger_modes['EXTERNAL'])
+        self.set_reg_by_name('TRIG_MODE', self.trigger_modes['EXTERNAL'])
         return
 
     def set_nsamples(self, n):
@@ -361,7 +368,7 @@ class AVR64EA28_DAQ_MCU(object):
         # The AVR firmware reports this value as a 16-bit signed integer,
         # so let's avoid setting values too large.
         if n > 32767: n = 32767
-        self.set_reg(2, n)
+        self.set_reg_by_name('NSAMPLES', n)
         return
 
     def start_sampling(self):
@@ -388,7 +395,7 @@ class AVR64EA28_DAQ_MCU(object):
         '''
         Returns the number of channels that were recorded per sample set.
         '''
-        return self.get_reg(1)
+        return self.get_reg_by_name('NCHANNELS')
 
     def get_byte_size_of_sample_set(self):
         '''
@@ -462,13 +469,13 @@ class AVR64EA28_DAQ_MCU(object):
 
         Note that this number should be treated as an unsigned integer.
         '''
-        return self.get_reg(2)
+        return self.get_reg_by_name('NSAMPLES')
 
     def get_trigger_mode(self):
         '''
         Returns the integer value representing the trigger mode.
         '''
-        return self.get_reg(3)
+        return self.get_reg_by_name('TRIG_MODE')
 
     def get_formatted_sample(self, i):
         '''
@@ -684,8 +691,8 @@ if __name__ == '__main__':
         print(daq_mcu.get_version())
         print("size of SRAM (bytes)=", daq_mcu.get_size_of_SRAM_in_bytes())
         print(daq_mcu.get_reg(0))
-        print(daq_mcu.set_reg(0, 250))
-        print(daq_mcu.get_reg(0))
+        print(daq_mcu.set_reg_by_name('PER_TICKS', 250))
+        print(daq_mcu.get_reg_by_name('PER_TICKS'))
         daq_mcu.set_regs_to_factory_values()
         daq_mcu.set_regs_from_dict({1:6, 2:100})
         print(daq_mcu.get_reg_values_as_text())
