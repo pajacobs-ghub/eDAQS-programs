@@ -56,8 +56,8 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 	if err != nil {
 		log.Printf("oops: %v\n", err)
 	}
-	for i := 0; i < len(data); i++ {
-		fmt.Printf("%d: %v\n", i, data[i])
+	for ch := 0; ch < len(data); ch++ {
+		fmt.Printf("channel %d: %v\n", ch, data[ch])
 	}
 	return
 }

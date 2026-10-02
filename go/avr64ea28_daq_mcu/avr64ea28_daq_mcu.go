@@ -548,15 +548,17 @@ func (my *AVR_DAQ_MCU) GetPageOfBytes(addr int) (ba []byte, err error) {
 
 // Higher-level functions
 
-// Returns the recorded values as a slice of sample sets,
-// each sample set being a slice of int values.
+// Returns the recorded values as a slice of records,
+// each record being a slice of int values representing
+// the history of voltage on a particular analog channel.
 //
 // This is a fairly slow way to get the full set of recorded samples
 // because the AVR is doing all of the house-keeping and returning the
 // sampled values as text strings.
 // It will be faster to fetch the SRAM data in and then unpack the
 // sample values on the PC.
-func (my *AVR_DAQ_MCU) GetRecordedData() (sampleData [][]int, err error) {
+func (my *AVR_DAQ_MCU) GetRecordedData() (data [][]int, err error) {
+	nChannels, _ := my.GetNChannels()
 	nSamplesAfterTrigger, _ := my.GetNSamples()
 	maxNSamples, _ := my.GetMaxNSamples()
 	mode, _ := my.GetTriggerMode()
@@ -568,11 +570,19 @@ func (my *AVR_DAQ_MCU) GetRecordedData() (sampleData [][]int, err error) {
 		// There may be wrap-around, so get the full record.
 		nSamples = maxNSamples
 	}
-	sampleData = make([][]int, nSamples)
+	data = make([][]int, nChannels)
+	for ach := 0; ach < nChannels; ach++ {
+		data[ach] = make([]int, nSamples)
+	}
+	var sampleData []int
 	for i := 0; i < nSamples; i++ {
-		sampleData[i], err = my.GetSampleSet(i)
+		sampleData, err = my.GetSampleSet(i)
 		if err != nil {
-			fmt.Errorf("error while getting sample set %d: %v", i, err)
+			err = fmt.Errorf("error while getting sample set %d: %v", i, err)
+			break
+		}
+		for ach := 0; ach < nChannels; ach++ {
+			data[ach][i] = sampleData[ach]
 		}
 	}
 	return
