@@ -237,11 +237,19 @@ func (my *AVR_DAQ_MCU) GetBurst() (acc SampleAccumulation, err error) {
 
 func (my *AVR_DAQ_MCU) SetDifferentialConversion() (err error) {
 	err = my.SetRegValue(DIFF_CONV, 1)
+	if err != nil {
+		err = fmt.Errorf("error while trying to set differential conversion: %w", err)
+		return
+	}
 	return
 }
 
 func (my *AVR_DAQ_MCU) SetSingleSidedConversion() (err error) {
 	err = my.SetRegValue(DIFF_CONV, 0)
+	if err != nil {
+		err = fmt.Errorf("error while trying to set single-sided conversion: %w", err)
+		return
+	}
 	return
 }
 
@@ -258,7 +266,119 @@ func (my *AVR_DAQ_MCU) ImmediateSampleSet() (vals []int, err error) {
 	for i := 0; i < n; i++ {
 		vals[i], err = strconv.Atoi(items[i])
 		if err != nil {
-			err = fmt.Errorf("error while getting immediate sample set, converting %s to int: %w", err)
+			err = fmt.Errorf("error while getting immediate sample set, converting %s to int: %w",
+				items[i], err)
+			return
+		}
+	}
+	return
+}
+
+// Recording will start immediately that the MCU is told to start sampling
+// and will stop after nsamples have been recorded.
+func (my *AVR_DAQ_MCU) SetTriggerImmediate() (err error) {
+	err = my.SetRegValue(TRIG_MODE, int(IMMEDIATE))
+	if err != nil {
+		err = fmt.Errorf("error while trying to set immediate trigger: %w", err)
+		return
+	}
+	return
+}
+
+// Recording will start immediately that the MCU is told to start sampling
+// and will continue indefinitely, until the specified channel crosses
+// the specified level.
+// nsamples with then be recorded and the sampling stops.
+func (my *AVR_DAQ_MCU) SetTriggerInternal(channel int, level int, slope TriggerSlope) (err error) {
+	err = my.SetRegValue(TRIG_MODE, int(INTERNAL))
+	if err != nil {
+		err = fmt.Errorf("error setting immediate trigger: %w", err)
+		return
+	}
+	err = my.SetRegValue(TRIG_CHAN, channel)
+	if err != nil {
+		err = fmt.Errorf("error setting trigger channel: %w", err)
+		return
+	}
+	err = my.SetRegValue(TRIG_LEVEL, level)
+	if err != nil {
+		err = fmt.Errorf("error setting trigger level: %w", err)
+		return
+	}
+	err = my.SetRegValue(TRIG_SLOPE, int(slope))
+	if err != nil {
+		err = fmt.Errorf("error setting trigger slope: %w", err)
+		return
+	}
+	return
+}
+
+// Recording will start immediately that the MCU is told to start sampling
+// and will continue indefinitely, until the EVENT# pin goes low.
+// nsamples with then be recorded and the sampling stops.
+func (my *AVR_DAQ_MCU) SetTriggerExternal() (err error) {
+	err = my.SetRegValue(TRIG_MODE, int(EXTERNAL))
+	return
+}
+
+func (my *AVR_DAQ_MCU) GetTriggerMode() (m TriggerMode, err error) {
+	var i int
+	i, err = my.GetRegValue(TRIG_MODE)
+	m = TriggerMode(i)
+	return
+}
+
+// NSAMPLES is the number of samples to be recorded after trigger event.
+func (my *AVR_DAQ_MCU) SetNSamples(n int) (err error) {
+	if n < 0 {
+		// Somewhat arbitrary.
+		n = 100
+	}
+	// The AVR firmware reports this value as a 16-bit signed integer,
+	// so let's avoid setting values too large.
+	if n > 32767 {
+		n = 32767
+	}
+	err = my.SetRegValue(NSAMPLES, n)
+	return
+}
+
+func (my *AVR_DAQ_MCU) GetNSamples() (n int, err error) {
+	n, err = my.GetRegValue(NSAMPLES)
+	return
+}
+
+// What happens after calling this function depends on the register settings
+// and, maybe, the external signals.
+func (my *AVR_DAQ_MCU) StartSampling() (err error) {
+	_, err = my.comms_mcu.Command_DAQ_MCU([]byte("g"))
+	if err != nil {
+		err = fmt.Errorf("error while trying to start sampling: %w", err)
+		return
+	}
+	return
+}
+
+// Returns the values of the recorded sample set i,
+// where i is counted from the oldest recorded sample (i=0).
+//
+// The AVR reports these values as a string of space-separated integers.
+func (my *AVR_DAQ_MCU) GetSampleSet(i int) (vals []int, err error) {
+	cmd := fmt.Sprintf("P %d", i)
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte(cmd))
+	if err != nil {
+		err = fmt.Errorf("error getting sample set %d: %w", i, err)
+		return
+	}
+	items := strings.Fields(string(resp))
+	n := len(items)
+	vals = make([]int, n)
+	for i := 0; i < n; i++ {
+		vals[i], err = strconv.Atoi(items[i])
+		if err != nil {
+			err = fmt.Errorf("error while getting sample set %d, converting %s to int: %w",
+				i, items[i], err)
 			return
 		}
 	}
