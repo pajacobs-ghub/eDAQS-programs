@@ -556,11 +556,21 @@ func (my *AVR_DAQ_MCU) GetPageOfBytes(addr int) (ba []byte, err error) {
 // sampled values as text strings.
 // It will be faster to fetch the SRAM data in and then unpack the
 // sample values on the PC.
-func (my *AVR_DAQ_MCU) GetRecordedData() (data [][]int, err error) {
-	nsamples, _ := my.GetNSamples()
-	data = make([][]int, nsamples)
-	for i := 0; i < nsamples; i++ {
-		data[i], err = my.GetSampleSet(i)
+func (my *AVR_DAQ_MCU) GetRecordedData() (sampleData [][]int, err error) {
+	nSamplesAfterTrigger, _ := my.GetNSamples()
+	maxNSamples, _ := my.GetMaxNSamples()
+	mode, _ := my.GetTriggerMode()
+	var nSamples int
+	if mode == IMMEDIATE {
+		// The oldest sample index is 0.
+		nSamples = nSamplesAfterTrigger
+	} else {
+		// There may be wrap-around, so get the full record.
+		nSamples = maxNSamples
+	}
+	sampleData = make([][]int, nSamples)
+	for i := 0; i < nSamples; i++ {
+		sampleData[i], err = my.GetSampleSet(i)
 		if err != nil {
 			fmt.Errorf("error while getting sample set %d: %v", i, err)
 		}
