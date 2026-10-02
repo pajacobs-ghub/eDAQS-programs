@@ -52,13 +52,12 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 		time.Sleep(1 * time.Second)
 	}
 	fmt.Println("DAQ_MCU is ready.")
-	nsamples, _ := daq_mcu.GetNSamples()
-	for i := 0; i < nsamples; i++ {
-		data, err := daq_mcu.GetSampleSet(i)
-		if err != nil {
-			log.Printf("oops: %v\n", err)
-		}
-		fmt.Printf("%d: %v\n", i, data)
+	data, err := daq_mcu.GetRecordedData()
+	if err != nil {
+		log.Printf("oops: %v\n", err)
+	}
+	for i := 0; i < len(data); i++ {
+		fmt.Printf("%d: %v\n", i, data[i])
 	}
 	return
 }

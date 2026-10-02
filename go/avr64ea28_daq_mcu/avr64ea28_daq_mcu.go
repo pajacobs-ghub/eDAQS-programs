@@ -8,6 +8,7 @@
 package avr64ea28_daq_mcu
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -24,6 +25,8 @@ func NewAVR_DAQ_MCU(comms_mcu *comms.COMMS_1_MCU) *AVR_DAQ_MCU {
 		comms_mcu: comms_mcu,
 	}
 }
+
+// Low-level functions
 
 func (my *AVR_DAQ_MCU) GetVersion() (resp []byte, err error) {
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("v"))
@@ -348,6 +351,11 @@ func (my *AVR_DAQ_MCU) GetNSamples() (n int, err error) {
 	return
 }
 
+func (my *AVR_DAQ_MCU) GetNChannels() (n int, err error) {
+	n, err = my.GetRegValue(NCHANNELS)
+	return
+}
+
 // What happens after calling this function depends on the register settings
 // and, maybe, the external signals.
 func (my *AVR_DAQ_MCU) StartSampling() (err error) {
@@ -380,6 +388,181 @@ func (my *AVR_DAQ_MCU) GetSampleSet(i int) (vals []int, err error) {
 			err = fmt.Errorf("error while getting sample set %d, converting %s to int: %w",
 				i, items[i], err)
 			return
+		}
+	}
+	return
+}
+
+// Returns a boolean flag indicating whether the requested sample period
+// was always maintained.
+//
+// It takes only one late arrival at the end of the sampling loop to
+// indicate that the AVR did not kep up during sampling.
+func (my *AVR_DAQ_MCU) DidNotKeepUpDuringSampling() (flag bool, err error) {
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("k"))
+	if err != nil {
+		err = fmt.Errorf("error while checking keep-up flag: %w", err)
+		return
+	}
+	iresp, err := strconv.Atoi(string(resp))
+	if err != nil {
+		err = fmt.Errorf("error while checking keep-up flag: %w", err)
+	}
+	flag = iresp == 1
+	return
+}
+
+// Returns the number of bytes used to store one sample set in SRAM.
+// Depends upon the number of channels being recorded.
+func (my *AVR_DAQ_MCU) GetByteSizeOfSampleSet() (n int, err error) {
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("b"))
+	if err != nil {
+		err = fmt.Errorf("error while getting byte-size of sample set: %w", err)
+		return
+	}
+	n, err = strconv.Atoi(string(resp))
+	if err != nil {
+		err = fmt.Errorf("error while getting byte-size of sample set: %w", err)
+	}
+	return
+}
+
+// Returns the number of sample sets that can be stored in SRAM.
+//
+// This value is dependent on the total amount of SRAM installed
+// and the number of channels being recorded.
+func (my *AVR_DAQ_MCU) GetMaxNSamples() (n int, err error) {
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("m"))
+	if err != nil {
+		err = fmt.Errorf("error while getting max NSAMPLES: %w", err)
+		return
+	}
+	n, err = strconv.Atoi(string(resp))
+	if err != nil {
+		err = fmt.Errorf("error while getting max NSAMPLES: %w", err)
+	}
+	return
+}
+
+func (my *AVR_DAQ_MCU) GetSizeOfSRAMInBytes() (n int, err error) {
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("T"))
+	if err != nil {
+		err = fmt.Errorf("error while getting size of SRAM: %w", err)
+		return
+	}
+	n, err = strconv.Atoi(string(resp))
+	if err != nil {
+		err = fmt.Errorf("error while getting size of SRAM: %w", err)
+	}
+	return
+}
+
+// Returns the byte-address.
+//
+// Since the SRAM memory is treated as a circular buffer,
+// this address may be almost anywhere in the available range.
+// The possible sizes of each sample set is restricted
+// so that sample sets fit neatly into the available SRAM space.
+// A sample set will not be split over the end/beginning of
+// the address-space.
+//
+// Until one full pass of the data space, this address will sit at zero.
+// Once the data space has been filled and the address wraps,
+// this returned address will be the same as for the next data to be written.
+func (my *AVR_DAQ_MCU) GetByteAddressOfOldestData() (n int, err error) {
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("a"))
+	if err != nil {
+		err = fmt.Errorf("error while getting byte address of oldest data: %w", err)
+		return
+	}
+	n, err = strconv.Atoi(string(resp))
+	if err != nil {
+		err = fmt.Errorf("error while getting byte address of oldest data: %w", err)
+	}
+	return
+}
+
+// Returns the byte-address of the next data sample to be written
+// into the SRAM memory.
+//
+// Since the SRAM memory is treated as a circular buffer,
+// this address may be almost anywhere in the available range
+// and will wrap around once the memory is full.
+//
+// The possible sizes of each sample set is restricted
+// so that sample sets fit neatly into the available SRAM space.
+// A sample set will not be split over the end/beginning of
+// the address-space.
+func (my *AVR_DAQ_MCU) GetByteAddressOfNextData() (n int, err error) {
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("A"))
+	if err != nil {
+		err = fmt.Errorf("error while getting byte address of next data: %w", err)
+		return
+	}
+	n, err = strconv.Atoi(string(resp))
+	if err != nil {
+		err = fmt.Errorf("error while getting byte address of next data: %w", err)
+	}
+	return
+}
+
+// Returns the number of 32-byte pages in the SRAM storage.
+func (my *AVR_DAQ_MCU) GetSizeOfSRAMInPages() (n int, err error) {
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("N"))
+	if err != nil {
+		err = fmt.Errorf("error while getting pages in SRAM: %w", err)
+		return
+	}
+	n, err = strconv.Atoi(string(resp))
+	if err != nil {
+		err = fmt.Errorf("error while getting pages in SRAM: %w", err)
+	}
+	return
+}
+
+// Returns a 32-byte array of bytes, starting at SRAM byte-address addr.
+// The data arrive as an array of hex characters, two characters per data byte.
+func (my *AVR_DAQ_MCU) GetPageOfBytes(addr int) (ba []byte, err error) {
+	cmd := fmt.Sprintf("M %d", addr)
+	var resp []byte
+	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte(cmd))
+	if err != nil {
+		err = fmt.Errorf("error while getting page of bytes: %w", err)
+		return
+	}
+	var n int
+	n, err = hex.Decode(ba, resp)
+	if err != nil {
+		err = fmt.Errorf("error while getting page of bytes, %d bytes decoded from hex: %w",
+			n, err)
+	}
+	return
+}
+
+// Higher-level functions
+
+// Returns the recorded values as a slice of sample sets,
+// each sample set being a slice of int values.
+//
+// This is a fairly slow way to get the full set of recorded samples
+// because the AVR is doing all of the house-keeping and returning the
+// sampled values as text strings.
+// It will be faster to fetch the SRAM data in and then unpack the
+// sample values on the PC.
+func (my *AVR_DAQ_MCU) GetRecordedData() (data [][]int, err error) {
+	nsamples, _ := my.GetNSamples()
+	data = make([][]int, nsamples)
+	for i := 0; i < nsamples; i++ {
+		data[i], err = my.GetSampleSet(i)
+		if err != nil {
+			fmt.Errorf("error while getting sample set %d: %v", i, err)
 		}
 	}
 	return
