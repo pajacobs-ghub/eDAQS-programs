@@ -4,10 +4,13 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	comms "example.com/edaqs/pic18f16q41_comms_1"
 	daq "example.com/edaqs/avr64ea28_daq_mcu"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -59,5 +62,35 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 	for ch := 0; ch < len(data); ch++ {
 		fmt.Printf("channel %d: %v\n", ch, data[ch])
 	}
+	//
+	// Open a file and write the data in CSV format.
+	//
+	t := time.Now()
+	cwd, _ := os.Getwd()
+	fileName := fmt.Sprintf("%d-%02d-%02dT%02d-%02d-%02d.data",
+		t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second())
+	path := filepath.Join(cwd, fileName)
+	f, err := os.Create(path)
+	if err != nil {
+		log.Printf("failed to create file %v", path)
+		return
+	}
+	defer f.Close()
+	w := bufio.NewWriter(f)
+	nchannels := len(data)
+	nsamples := len(data[0])
+	for i := 0; i < nsamples; i++ {
+		var delim string
+		for ch := 0; ch < nchannels; ch++ {
+			if ch == 0 {
+				delim = ""
+			} else {
+				delim = ","
+			}
+			w.WriteString(fmt.Sprintf("%s%d", delim, data[ch][i]))
+		}
+		w.WriteString("\n")
+	}
+	w.Flush()
 	return
 }
