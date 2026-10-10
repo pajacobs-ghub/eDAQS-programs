@@ -55,10 +55,11 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 		time.Sleep(1 * time.Second)
 	}
 	fmt.Println("DAQ_MCU is ready.")
-	data, err := daq_mcu.GetRecordedData()
+	data, meta, err := daq_mcu.GetRecordedData()
 	if err != nil {
 		log.Printf("oops: %v\n", err)
 	}
+	fmt.Printf("metaData = %v\n", meta)
 	for ch := 0; ch < len(data); ch++ {
 		fmt.Printf("channel %d: %v\n", ch, data[ch])
 	}
