@@ -148,6 +148,17 @@ func (i PGAGain) String() string {
 	return "UNKNOWN_PGAGain"
 }
 
+func (i PGAGain) Value() float64 {
+	switch i {
+	case X1: return 1.0
+	case X2: return 2.0
+	case X4: return 4.0
+	case X8: return 8.0
+	case X16: return 16.0
+	}
+	return 1.0
+}
+
 type SampleAccumulation uint
 
 const (
@@ -181,6 +192,23 @@ func (i SampleAccumulation) String() string {
 	return "UNKNOWN_SampleAccumulation"
 }
 
+func (i SampleAccumulation) Value() int {
+	switch i {
+	case ACC0: return 1
+	case ACC2: return 2
+	case ACC4: return 4
+	case ACC8: return 8
+	case ACC16: return 16
+	case ACC32: return 32
+	case ACC64: return 64
+	case ACC128: return 128
+	case ACC256: return 256
+	case ACC512: return 512
+	case ACC1024: return 1024
+	}
+	return 0
+}
+
 type RefVoltage uint
 
 const (
@@ -200,6 +228,17 @@ func (i RefVoltage) String() string {
 	case Vref2500: return "2500mV"
 	}
 	return "UNKNOWN_Vref"
+}
+
+func (i RefVoltage) Value() float64 {
+	switch i {
+	case Vref4750: return 4.750
+	case Vref1024: return 1.024
+	case Vref2048: return 2.048
+	case Vref4096: return 4.096
+	case Vref2500: return 2.500
+	}
+	return 0.0
 }
 
 type TriggerMode uint

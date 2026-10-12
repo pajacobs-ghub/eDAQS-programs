@@ -16,10 +16,17 @@ import (
 // the history of voltage on a particular analog channel.
 type Record [][]int
 
+// The description of the sampled-data record should work for
+// the full range of eDAQS boards.
 type RecordMetaData struct {
 	NChannels int
 	NSamplesInRecord int
 	NSamplesPreTrigger int
+	DTmicroseconds float64
+	LateFlag bool
+	// The following slices will hold one value per channel.
+	FullScaleVoltage []float64
+	FullScaleCount []int
 }
 
 func NewRecord(meta RecordMetaData) (data Record) {

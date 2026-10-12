@@ -257,6 +257,15 @@ func (my *AVR_DAQ_MCU) SetSingleSidedConversion() (err error) {
 	return
 }
 
+func (my *AVR_DAQ_MCU) GetDifferentialConversionFlag() (df int, err error) {
+	df, err = my.GetRegValue(DIFF_CONV)
+	if err != nil {
+		err = fmt.Errorf("error reading DIFF_CONV register: %w", err)
+		return
+	}
+	return
+}
+
 func (my *AVR_DAQ_MCU) ImmediateSampleSet() (vals []int, err error) {
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("I"))
@@ -589,6 +598,61 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m edaqs.RecordMetaData, err error) {
 	m.NChannels = nChannels
 	m.NSamplesInRecord = totalSamples
 	m.NSamplesPreTrigger = totalSamples-nSamplesAfterTrigger
+	//
+	m.DTmicroseconds, err = my.GetSamplePeriod_us()
+	if err != nil {
+		err = fmt.Errorf("failed to get sample period: %w", err)
+		return
+	}
+	m.LateFlag, err = my.DidNotKeepUpDuringSampling()
+	if err != nil {
+		err = fmt.Errorf("failed to get late flag: %w", err)
+		return
+	}
+	//
+	// Characterize the analog voltage scaling.
+	//
+	g, err := my.GetAnalogGain()
+	if err != nil {
+		err = fmt.Errorf("failed to get gain: %w", err)
+		return
+	}
+	gain := g.Value()
+	vref, err := my.GetAnalogRefVoltage()
+	if err != nil {
+		err = fmt.Errorf("failed to get ref voltage: %w", err)
+		return
+	}
+	vrefV := vref.Value()
+	diffConv, err := my.GetDifferentialConversionFlag()
+	if err != nil {
+		err = fmt.Errorf("failed to get differential-conversion flag: %w", err)
+		return
+	}
+	accum, err := my.GetBurst()
+	if err != nil {
+		err = fmt.Errorf("failed to get cample-accumulation setting: %w", err)
+		return
+	}
+	// Start by assuming that we are getting an unsigned 16-bit conversion result,
+	// then adjust according to the observed ADC settings.
+	countMax := 65536
+	if accum == ACC0 {
+		// Without accumulation, we have a 12-bit conversion result.
+		countMax = 4096
+	}
+	if diffConv == 1 {
+		// There is a sign bit.
+		countMax /= 2
+	}
+	// These are the same for all channels in the AVR edaqs board.
+	m.FullScaleVoltage = make([]float64, nChannels)
+	m.FullScaleCount = make([]int, nChannels)
+	for ach := 0; ach < nChannels; ach++ {
+		m.FullScaleVoltage[ach] = vrefV / gain
+		m.FullScaleCount[ach] = countMax
+	}
+	//
 	return
 }
 
