@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	comms "example.com/edaqs/pic18f16q41_comms_1"
+	edaqs "example.com/edaqs"
 )
 
 
@@ -548,16 +549,9 @@ func (my *AVR_DAQ_MCU) GetPageOfBytes(addr int) (ba []byte, err error) {
 
 // Higher-level functions
 
-type RecordMetaData struct {
-	NChannels int
-	NSamplesInRecord int
-	NSamplesPreTrigger int
-}
-
-func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
+func (my *AVR_DAQ_MCU) GetRecordMetaData() (m edaqs.RecordMetaData, err error) {
 	// Read the current information from the DAQ MCU
 	// to construct the metadata for the recording that was made.
-	m = RecordMetaData{}
 	nChannels, err := my.GetNChannels()
 	if err != nil {
 		err = fmt.Errorf("failed to get nChannels: %w", err)
@@ -598,26 +592,19 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 	return
 }
 
-// Returns the recorded values as a slice of records,
-// each record being a slice of int values representing
-// the history of voltage on a particular analog channel.
-//
 // This is a fairly slow way to get the full set of recorded samples
 // because the AVR is doing all of the house-keeping and returning the
 // sampled values as text strings.
 // It will be faster to fetch the SRAM data in and then unpack the
 // sample values on the PC.
-func (my *AVR_DAQ_MCU) GetRecordedData() (data [][]int, metaData RecordMetaData, err error) {
-	metaData, err = my.GetRecordMetaData()
+func (my *AVR_DAQ_MCU) GetRecordedData() (data edaqs.Record, meta edaqs.RecordMetaData, err error) {
+	meta, err = my.GetRecordMetaData()
 	if err != nil {
 		err = fmt.Errorf("failed to get metadata for record: %w", err)
 	}
-	nChannels := metaData.NChannels
-	nSamples := metaData.NSamplesInRecord
-	data = make([][]int, nChannels)
-	for ach := 0; ach < nChannels; ach++ {
-		data[ach] = make([]int, nSamples)
-	}
+	data = edaqs.NewRecord(meta)
+	nChannels := meta.NChannels
+	nSamples := meta.NSamplesInRecord
 	var sampleData []int
 	for i := 0; i < nSamples; i++ {
 		sampleData, err = my.GetSampleSet(i)

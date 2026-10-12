@@ -78,20 +78,6 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 	}
 	defer f.Close()
 	w := bufio.NewWriter(f)
-	nchannels := len(data)
-	nsamples := len(data[0])
-	for i := 0; i < nsamples; i++ {
-		var delim string
-		for ch := 0; ch < nchannels; ch++ {
-			if ch == 0 {
-				delim = ""
-			} else {
-				delim = ","
-			}
-			w.WriteString(fmt.Sprintf("%s%d", delim, data[ch][i]))
-		}
-		w.WriteString("\n")
-	}
-	w.Flush()
+	data.WriteCSV(w)
 	return
 }
