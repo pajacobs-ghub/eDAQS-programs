@@ -558,23 +558,39 @@ func (my *AVR_DAQ_MCU) GetPageOfBytes(addr int) (ba []byte, err error) {
 
 // Higher-level functions
 
-func (my *AVR_DAQ_MCU) GetRecordMetaData() (m edaqs.RecordMetaData, err error) {
+// The description of the sampled-data record held by the DAQ MCU
+type RecordMetaData struct {
+	NChannels int
+	NSamplesInRecord int
+	NSamplesPreTrigger int
+	TriggerSample int
+	DTmicroseconds float64
+	LateFlag bool
+	// The following slices will hold one value per channel.
+	FullScaleVoltage []float64
+	FullScaleCount []int
+}
+
+func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 	// Read the current information from the DAQ MCU
 	// to construct the metadata for the recording that was made.
 	nChannels, err := my.GetNChannels()
 	if err != nil {
-		err = fmt.Errorf("failed to get nChannels: %w", err)
+		err = fmt.Errorf("failed to get nChannels from DAQ_MCU: %w", err)
 		return
 	}
 	m.NChannels = nChannels
-	nSamplesAfterTrigger, err := my.GetNSamples()
-	if err != nil {
-		err = fmt.Errorf("failed to get nSamples: %w", err)
-		return
-	}
+	//
 	maxNSamples, err := my.GetMaxNSamples()
 	if err != nil {
-		err = fmt.Errorf("failed to get max nSamples: %w", err)
+		err = fmt.Errorf("failed to get MAX nSamples from DAQ_MCU: %w", err)
+		return
+	}
+	m.NSamplesInRecord = maxNSamples
+	//
+	nSamplesAfterTrigger, err := my.GetNSamples()
+	if err != nil {
+		err = fmt.Errorf("failed to get nSamples from DAQ_MCU: %w", err)
 		return
 	}
 	if nSamplesAfterTrigger > maxNSamples {
@@ -584,29 +600,24 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m edaqs.RecordMetaData, err error) {
 	}
 	mode, err := my.GetTriggerMode()
 	if err != nil {
-		err = fmt.Errorf("failed to get trigger mode: %w", err)
+		err = fmt.Errorf("failed to get trigger mode from DAQ_MCU: %w", err)
 		return
 	}
-	var totalSamples int
 	if mode == IMMEDIATE {
-		// The oldest sample index is 0.
-		totalSamples = nSamplesAfterTrigger
+		m.TriggerSample = 0
 	} else {
-		// There may be wrap-around, so get the full record.
-		totalSamples = maxNSamples
+		m.TriggerSample = maxNSamples - nSamplesAfterTrigger
 	}
-	m.NChannels = nChannels
-	m.NSamplesInRecord = totalSamples
-	m.NSamplesPreTrigger = totalSamples-nSamplesAfterTrigger
+	m.NSamplesPreTrigger = maxNSamples-nSamplesAfterTrigger
 	//
 	m.DTmicroseconds, err = my.GetSamplePeriod_us()
 	if err != nil {
-		err = fmt.Errorf("failed to get sample period: %w", err)
+		err = fmt.Errorf("failed to get sample period from DAQ_MCU: %w", err)
 		return
 	}
 	m.LateFlag, err = my.DidNotKeepUpDuringSampling()
 	if err != nil {
-		err = fmt.Errorf("failed to get late flag: %w", err)
+		err = fmt.Errorf("failed to get late flag from DAQ_MCU: %w", err)
 		return
 	}
 	//
@@ -614,24 +625,24 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m edaqs.RecordMetaData, err error) {
 	//
 	g, err := my.GetAnalogGain()
 	if err != nil {
-		err = fmt.Errorf("failed to get gain: %w", err)
+		err = fmt.Errorf("failed to get gain from DAQ_MCU: %w", err)
 		return
 	}
 	gain := g.Value()
 	vref, err := my.GetAnalogRefVoltage()
 	if err != nil {
-		err = fmt.Errorf("failed to get ref voltage: %w", err)
+		err = fmt.Errorf("failed to get ref voltage from DAQ_MCU: %w", err)
 		return
 	}
 	vrefV := vref.Value()
 	diffConv, err := my.GetDifferentialConversionFlag()
 	if err != nil {
-		err = fmt.Errorf("failed to get differential-conversion flag: %w", err)
+		err = fmt.Errorf("failed to get differential-conversion flag from DAQ_MCU: %w", err)
 		return
 	}
 	accum, err := my.GetBurst()
 	if err != nil {
-		err = fmt.Errorf("failed to get cample-accumulation setting: %w", err)
+		err = fmt.Errorf("failed to get sample-accumulation setting from DAQ_MCU: %w", err)
 		return
 	}
 	// Start by assuming that we are getting an unsigned 16-bit conversion result,
@@ -656,28 +667,55 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m edaqs.RecordMetaData, err error) {
 	return
 }
 
+type SampleSelection struct {
+	PreTrigger int
+	Total int
+}
+
 // This is a fairly slow way to get the full set of recorded samples
 // because the AVR is doing all of the house-keeping and returning the
 // sampled values as text strings.
 // It will be faster to fetch the SRAM data in and then unpack the
 // sample values on the PC.
-func (my *AVR_DAQ_MCU) GetRecordedData() (data edaqs.Record, meta edaqs.RecordMetaData, err error) {
-	meta, err = my.GetRecordMetaData()
+func (my *AVR_DAQ_MCU) GetRecordedData(ss *SampleSelection) (rec edaqs.Record, err error) {
+	meta, err := my.GetRecordMetaData()
 	if err != nil {
 		err = fmt.Errorf("failed to get metadata for record: %w", err)
+		return
 	}
-	data = edaqs.NewRecord(meta)
 	nChannels := meta.NChannels
-	nSamples := meta.NSamplesInRecord
+	// By default, we return the entire record from the DAQ MCU.
+	// FIX-ME The following works only for IMMEDIATE mode trigger, presently.
+	firstSampleSelected := 0
+	lastSampleSelected := meta.NSamplesInRecord
+	nSamplesSelected := meta.NSamplesInRecord
+	// We might want to adjust the selection of samples to be a subset of the full record.
+	if ss != nil {
+		// FIX-ME Need to consider wrap-around for other trigger modes.
+		firstSampleSelected = meta.TriggerSample - ss.PreTrigger
+		lastSampleSelected = firstSampleSelected + ss.Total
+		nSamplesSelected = ss.Total
+	}
+	// Prepare the record of data that gets returned.
+	rec = edaqs.Record{
+		NChannels: nChannels,
+		NSamplesInRecord: nSamplesSelected,
+		NSamplesPreTrigger: meta.NSamplesPreTrigger,
+		DTmicroseconds: meta.DTmicroseconds,
+		LateFlag: meta.LateFlag,
+		FullScaleVoltage: meta.FullScaleVoltage,
+		FullScaleCount: meta.FullScaleCount,
+	}
+	rec.AllocateDataSpace(nChannels, nSamplesSelected)
 	var sampleData []int
-	for i := 0; i < nSamples; i++ {
+	for i := firstSampleSelected; i < lastSampleSelected; i++ {
 		sampleData, err = my.GetSampleSet(i)
 		if err != nil {
 			err = fmt.Errorf("error while getting sample set %d: %v", i, err)
 			break
 		}
 		for ach := 0; ach < nChannels; ach++ {
-			data[ach][i] = sampleData[ach]
+			rec.Data[ach][i] = sampleData[ach]
 		}
 	}
 	return

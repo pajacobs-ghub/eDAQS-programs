@@ -15,7 +15,7 @@ import (
 )
 
 func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.AVR_DAQ_MCU) {
-	fmt.Println("Begin Test 3 Immediate Short Recording...")
+	fmt.Println("Begin Test 3 Immediate-mode Short Recording...")
 	responseBytes, err := comms_mcu.GetVersion()
 	if err != nil {
 		log.Printf("error getting version from COMMS_MCU: %v\n", err)
@@ -55,14 +55,12 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 		time.Sleep(1 * time.Second)
 	}
 	fmt.Println("DAQ_MCU is ready.")
-	data, meta, err := daq_mcu.GetRecordedData()
+	sSelect := daq.SampleSelection{PreTrigger: 0, Total: 10}
+	rec, err := daq_mcu.GetRecordedData(&sSelect)
 	if err != nil {
 		log.Printf("oops: %v\n", err)
 	}
-	fmt.Printf("metaData = %v\n", meta)
-	for ch := 0; ch < len(data); ch++ {
-		fmt.Printf("channel %d: %v\n", ch, data[ch])
-	}
+	fmt.Printf("rec = %v\n", rec)
 	//
 	// Open a file and write the data in CSV format.
 	//
@@ -78,6 +76,6 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 	}
 	defer f.Close()
 	w := bufio.NewWriter(f)
-	data.WriteCSV(w)
+	rec.WriteData(w)
 	return
 }

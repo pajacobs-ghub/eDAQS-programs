@@ -14,11 +14,10 @@ import (
 // Contains the sampled values as a slice of channel-records,
 // each channel-record being a slice of int values representing
 // the history of voltage on a particular analog channel.
-type Record [][]int
-
-// The description of the sampled-data record should work for
+// This description of the sampled-data record should work for
 // the full range of eDAQS boards.
-type RecordMetaData struct {
+type Record struct {
+	Data [][]int
 	NChannels int
 	NSamplesInRecord int
 	NSamplesPreTrigger int
@@ -29,19 +28,18 @@ type RecordMetaData struct {
 	FullScaleCount []int
 }
 
-func NewRecord(meta RecordMetaData) (data Record) {
-	nChannels := meta.NChannels
-	nSamples := meta.NSamplesInRecord
-	data = make([][]int, nChannels)
+func (r *Record) AllocateDataSpace(nChannels int, nSamples int) {
+	r.Data = make([][]int, nChannels)
 	for ach := 0; ach < nChannels; ach++ {
-		data[ach] = make([]int, nSamples)
+		r.Data[ach] = make([]int, nSamples)
 	}
 	return
 }
 
-func (data Record) WriteCSV(w *bufio.Writer) {
-	nchannels := len(data)
-	nsamples := len(data[0])
+// Write the samples data in CSV format.
+func (r Record) WriteData(w *bufio.Writer) {
+	nchannels := len(r.Data)
+	nsamples := len(r.Data[0])
 	for i := 0; i < nsamples; i++ {
 		var delim string
 		for ch := 0; ch < nchannels; ch++ {
@@ -50,7 +48,7 @@ func (data Record) WriteCSV(w *bufio.Writer) {
 			} else {
 				delim = ","
 			}
-			w.WriteString(fmt.Sprintf("%s%d", delim, data[ch][i]))
+			w.WriteString(fmt.Sprintf("%s%d", delim, r.Data[ch][i]))
 		}
 		w.WriteString("\n")
 	}
