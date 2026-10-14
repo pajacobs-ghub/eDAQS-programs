@@ -66,7 +66,7 @@ func main() {
 	case 2:
 		ex_2_immediate_sample_set(comms_mcu, daq_mcu)
 	case 3:
-		ex_3_immediate_short_recording(comms_mcu, daq_mcu)
+		ex_3_immediate_short_recording(comms_mcu, daq_mcu, *nodeId)
 	default:
 		fmt.Println("No test selected.")
 	}

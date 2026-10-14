@@ -564,6 +564,7 @@ type RecordMetaData struct {
 	NSamplesInRecord int
 	NSamplesPreTrigger int
 	TriggerSample int
+	Mode TriggerMode
 	DTmicroseconds float64
 	LateFlag bool
 	// The following slices will hold one value per channel.
@@ -598,17 +599,18 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 		// at the trigger time because they would have been overwritten.
 		nSamplesAfterTrigger = maxNSamples
 	}
-	mode, err := my.GetTriggerMode()
+	m.Mode, err = my.GetTriggerMode()
 	if err != nil {
 		err = fmt.Errorf("failed to get trigger mode from DAQ_MCU: %w", err)
 		return
 	}
-	if mode == IMMEDIATE {
+	if m.Mode == IMMEDIATE {
 		m.TriggerSample = 0
+		m.NSamplesPreTrigger = 0
 	} else {
 		m.TriggerSample = maxNSamples - nSamplesAfterTrigger
+		m.NSamplesPreTrigger = maxNSamples - nSamplesAfterTrigger
 	}
-	m.NSamplesPreTrigger = maxNSamples-nSamplesAfterTrigger
 	//
 	m.DTmicroseconds, err = my.GetSamplePeriod_us()
 	if err != nil {

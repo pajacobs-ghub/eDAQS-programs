@@ -4,17 +4,14 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	comms "example.com/edaqs/pic18f16q41_comms_1"
 	daq "example.com/edaqs/avr64ea28_daq_mcu"
-	"os"
-	"path/filepath"
 	"time"
 )
 
-func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.AVR_DAQ_MCU) {
+func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.AVR_DAQ_MCU, nodeId string) {
 	fmt.Println("Begin Test 3 Immediate-mode Short Recording...")
 	responseBytes, err := comms_mcu.GetVersion()
 	if err != nil {
@@ -62,20 +59,12 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 	}
 	fmt.Printf("rec = %v\n", rec)
 	//
-	// Open a file and write the data in CSV format.
-	//
 	t := time.Now()
-	cwd, _ := os.Getwd()
-	fileName := fmt.Sprintf("%d-%02d-%02dT%02d-%02d-%02d.data",
-		t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second())
-	path := filepath.Join(cwd, fileName)
-	f, err := os.Create(path)
+	fileName := fmt.Sprintf("%d-%02d-%02dT%02d-%02d-%02d-node-%s",
+		t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), nodeId)
+	err = rec.Save(fileName)
 	if err != nil {
-		log.Printf("failed to create file %v", path)
-		return
+		log.Printf("oops: %v\n", err)
 	}
-	defer f.Close()
-	w := bufio.NewWriter(f)
-	rec.WriteData(w)
 	return
 }
