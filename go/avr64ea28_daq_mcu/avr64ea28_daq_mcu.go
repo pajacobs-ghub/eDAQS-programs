@@ -134,11 +134,11 @@ func (my *AVR_DAQ_MCU) GetSamplePeriod_us() (dt float64, err error) {
 	return
 }
 
-func (my *AVR_DAQ_MCU) SetAnalogChannels(pairs map[RegIndex]InputPin) (err error) {
+func (my *AVR_DAQ_MCU) SetAnalogChannelPins(pairs map[RegIndex]InputPin) (err error) {
 	for i, val := range pairs {
 		err = my.SetRegValue(i, int(val))
 		if err != nil {
-			err = fmt.Errorf("error while setting channel %v to input %v: %w", i, val, err)
+			err = fmt.Errorf("error while setting channel pin %v to input %v: %w", i, val, err)
 			return
 		}
 	}
@@ -361,6 +361,18 @@ func (my *AVR_DAQ_MCU) GetNSamples() (n int, err error) {
 	return
 }
 
+func (my *AVR_DAQ_MCU) SetNChannels(n int) (err error) {
+	if n < 0 {
+		// Somewhat arbitrary.
+		n = 0
+	}
+	if n > 12 {
+		n = 12
+	}
+	err = my.SetRegValue(NCHANNELS, n)
+	return
+}
+
 func (my *AVR_DAQ_MCU) GetNChannels() (n int, err error) {
 	n, err = my.GetRegValue(NCHANNELS)
 	return
@@ -558,13 +570,18 @@ func (my *AVR_DAQ_MCU) GetPageOfBytes(addr int) (ba []byte, err error) {
 
 // Higher-level functions
 
-// The description of the sampled-data record held by the DAQ MCU
+// The description of the sampled-data record held by the AVR DAQ MCU
 type RecordMetaData struct {
 	NChannels int
 	MaxNSamples int
 	NSamplesInRecord int
 	NSamplesPreTrigger int
 	TriggerSample int
+	ByteAddrOldestData int
+	ByteAddrNextData int
+	TotalBytes int
+	TotalPages int
+	BytesPerSampleSet int
 	Mode TriggerMode
 	DTmicroseconds float64
 	LateFlag bool
@@ -601,6 +618,33 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 		// at the trigger time because they would have been overwritten.
 		nSamplesAfterTrigger = maxNSamples
 	}
+	//
+	m.ByteAddrOldestData, err = my.GetByteAddressOfOldestData()
+	if err != nil {
+		err = fmt.Errorf("failed to get byte address of oldest data from DAQ_MCU: %w", err)
+		return
+	}
+	m.ByteAddrNextData, err = my.GetByteAddressOfNextData()
+	if err != nil {
+		err = fmt.Errorf("failed to get byte address of NEXT data from DAQ_MCU: %w", err)
+		return
+	}
+	m.TotalBytes, err = my.GetSizeOfSRAMInBytes()
+	if err != nil {
+		err = fmt.Errorf("failed to get size of SRAM in bytes from DAQ_MCU: %w", err)
+		return
+	}
+	m.TotalPages, err = my.GetSizeOfSRAMInPages()
+	if err != nil {
+		err = fmt.Errorf("failed to get size of SRAM in pages from DAQ_MCU: %w", err)
+		return
+	}
+	m.BytesPerSampleSet, err = my.GetByteSizeOfSampleSet()
+	if err != nil {
+		err = fmt.Errorf("failed to get size of sample-set in bytes from DAQ_MCU: %w", err)
+		return
+	}
+	//
 	m.Mode, err = my.GetTriggerMode()
 	if err != nil {
 		err = fmt.Errorf("failed to get trigger mode from DAQ_MCU: %w", err)
@@ -681,7 +725,7 @@ type SampleSelection struct {
 // sampled values as text strings.
 // It will be faster to fetch the SRAM data in and then unpack the
 // sample values on the PC.
-func (my *AVR_DAQ_MCU) GetRecordedData(ss *SampleSelection) (rec edaqs.Record, err error) {
+func (my *AVR_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.Record, err error) {
 	meta, err := my.GetRecordMetaData()
 	if err != nil {
 		err = fmt.Errorf("failed to get metadata for record: %w", err)
@@ -726,6 +770,7 @@ func (my *AVR_DAQ_MCU) GetRecordedData(ss *SampleSelection) (rec edaqs.Record, e
 	rec.AllocateDataSpace(nChannels, nSamplesSelected)
 	var sampleData []int
 	wrapN := meta.MaxNSamples;
+	// The first sample selected (the oldest) is assigned as (new) index zero.
 	jj := 0
 	for i := firstSampleSelected; i < lastSampleSelected; i++ {
 		// We may need to unwrap the index.

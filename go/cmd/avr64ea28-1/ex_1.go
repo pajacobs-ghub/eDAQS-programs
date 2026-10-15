@@ -92,7 +92,7 @@ func ex_1_simple_interaction(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.AVR_DAQ_
 		daq.CH0P: daq.AIN31,
 		daq.CH0N: daq.GND,
 	}
-	err = daq_mcu.SetAnalogChannels(chans)
+	err = daq_mcu.SetAnalogChannelPins(chans)
 	chRegs := []daq.RegIndex{daq.CH0P, daq.CH0N, daq.CH1P, daq.CH1N, daq.CH2P, daq.CH2N}
 	chPins, _ := daq_mcu.GetRegValues(chRegs)
 	fmt.Printf("after setting some channels, register values: %v %v\n", chRegs, chPins)

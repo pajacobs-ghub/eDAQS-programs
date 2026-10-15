@@ -26,10 +26,28 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 		fmt.Printf("DAQ_MCU version string: %v\n", string(response2Bytes))
 	}
 	//
-	// Report sample set for default register settings.
+	// Report sample set an immediate-mode recording.
 	_ = daq_mcu.SetRegistersToFactoryValues()
+	_ = daq_mcu.SetSamplePeriod_us(1000)
 	_ = daq_mcu.SetTriggerImmediate()
-	_ = daq_mcu.SetNSamples(10)
+	_ = daq_mcu.SetNSamples(100)
+	// Set up two differential channels.
+	_ = daq_mcu.SetNChannels(2)
+	_ = daq_mcu.SetDifferentialConversion()
+	chans := map[daq.RegIndex]daq.InputPin{
+		daq.CH0P: daq.AIN28,
+		daq.CH0N: daq.AIN29,
+		daq.CH1P: daq.AIN30,
+		daq.CH1N: daq.AIN31,
+	}
+	_ = daq_mcu.SetAnalogChannelPins(chans)
+	chRegs := []daq.RegIndex{daq.CH0P, daq.CH0N, daq.CH1P, daq.CH1N, daq.CH2P, daq.CH2N}
+	chPins, _ := daq_mcu.GetRegValues(chRegs)
+	fmt.Printf("after setting some channels, register values: %v %v\n", chRegs, chPins)
+	//
+	_ = daq_mcu.SetPGA(daq.X4)
+	_ = daq_mcu.SetAnalogRefVoltage(daq.Vref1024)
+	//
 	fmt.Println("Start sampling and wait until event has occurred and DAQ_MCU is not busy.")
 	err = daq_mcu.StartSampling()
 	if err != nil {
@@ -37,6 +55,7 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 		return
 	}
 	for {
+		fmt.Println("Waiting...")
 		time.Sleep(1 * time.Second)
 		done, _ := comms_mcu.Check_EventHasPassed()
 		if done {
@@ -52,8 +71,8 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 		time.Sleep(1 * time.Second)
 	}
 	fmt.Println("DAQ_MCU is ready.")
-	sSelect := daq.SampleSelection{PreTrigger: 0, Total: 10}
-	rec, err := daq_mcu.GetRecordedData(&sSelect)
+	sSelect := daq.SampleSelection{PreTrigger: 0, Total: 100}
+	rec, err := daq_mcu.GetRecordedDataByIndex(&sSelect)
 	if err != nil {
 		log.Printf("oops: %v\n", err)
 	}
