@@ -561,6 +561,7 @@ func (my *AVR_DAQ_MCU) GetPageOfBytes(addr int) (ba []byte, err error) {
 // The description of the sampled-data record held by the DAQ MCU
 type RecordMetaData struct {
 	NChannels int
+	MaxNSamples int
 	NSamplesInRecord int
 	NSamplesPreTrigger int
 	TriggerSample int
@@ -587,6 +588,7 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 		err = fmt.Errorf("failed to get MAX nSamples from DAQ_MCU: %w", err)
 		return
 	}
+	m.MaxNSamples = maxNSamples
 	m.NSamplesInRecord = maxNSamples
 	//
 	nSamplesAfterTrigger, err := my.GetNSamples()
@@ -686,17 +688,30 @@ func (my *AVR_DAQ_MCU) GetRecordedData(ss *SampleSelection) (rec edaqs.Record, e
 		return
 	}
 	nChannels := meta.NChannels
+	//
 	// By default, we return the entire record from the DAQ MCU.
-	// FIX-ME The following works only for IMMEDIATE mode trigger, presently.
+	// When indexing by sample number, the AVR DAQ MCU always has
+	// the oldest at index 0, even if it has a non-zero byte address
+	// within its SRAM storage.
 	firstSampleSelected := 0
 	lastSampleSelected := meta.NSamplesInRecord
 	nSamplesSelected := meta.NSamplesInRecord
 	// We might want to adjust the selection of samples to be a subset of the full record.
 	if ss != nil {
-		// FIX-ME Need to consider wrap-around for other trigger modes.
-		firstSampleSelected = meta.TriggerSample - ss.PreTrigger
-		lastSampleSelected = firstSampleSelected + ss.Total
-		nSamplesSelected = ss.Total
+		if meta.Mode == IMMEDIATE {
+			// For IMMEDIATE mode, the trigger sample is always at index zero.
+			// There are no sample data at the other end of SRAM to wrap around.
+			firstSampleSelected = 0
+			lastSampleSelected = firstSampleSelected + ss.Total
+			nSamplesSelected = ss.Total
+		} else {
+			// Because of potential wrap-around for other trigger modes,
+			// it may be that the selected first-sample index is zero.
+			// We will hanfle this wrap-around below.
+			firstSampleSelected = meta.TriggerSample - ss.PreTrigger
+			lastSampleSelected = firstSampleSelected + ss.Total
+			nSamplesSelected = ss.Total
+		}
 	}
 	// Prepare the record of data that gets returned.
 	rec = edaqs.Record{
@@ -710,15 +725,26 @@ func (my *AVR_DAQ_MCU) GetRecordedData(ss *SampleSelection) (rec edaqs.Record, e
 	}
 	rec.AllocateDataSpace(nChannels, nSamplesSelected)
 	var sampleData []int
+	wrapN := meta.MaxNSamples;
+	jj := 0
 	for i := firstSampleSelected; i < lastSampleSelected; i++ {
-		sampleData, err = my.GetSampleSet(i)
+		// We may need to unwrap the index.
+		ii := i
+		for ii < 0 {
+			ii += wrapN
+		}
+		for ii >= wrapN {
+			ii -= wrapN
+		}
+		sampleData, err = my.GetSampleSet(ii)
 		if err != nil {
 			err = fmt.Errorf("error while getting sample set %d: %v", i, err)
 			break
 		}
 		for ach := 0; ach < nChannels; ach++ {
-			rec.Data[ach][i] = sampleData[ach]
+			rec.Data[ach][jj] = sampleData[ach]
 		}
+		jj += 1
 	}
 	return
 }
