@@ -575,6 +575,7 @@ type RecordMetaData struct {
 	NChannels int
 	MaxNSamples int
 	NSamplesInRecord int
+	NSamplesAfterTrigger int
 	NSamplesPreTrigger int
 	TriggerSample int
 	ByteAddrOldestData int
@@ -593,29 +594,23 @@ type RecordMetaData struct {
 func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 	// Read the current information from the DAQ MCU
 	// to construct the metadata for the recording that was made.
-	nChannels, err := my.GetNChannels()
+	m.NChannels, err = my.GetNChannels()
 	if err != nil {
 		err = fmt.Errorf("failed to get nChannels from DAQ_MCU: %w", err)
 		return
 	}
-	m.NChannels = nChannels
 	//
-	maxNSamples, err := my.GetMaxNSamples()
+	// Maximum number of samples that could be stored in the DAQ MCU's SRAM.
+	m.MaxNSamples, err = my.GetMaxNSamples()
 	if err != nil {
 		err = fmt.Errorf("failed to get MAX nSamples from DAQ_MCU: %w", err)
 		return
 	}
-	m.MaxNSamples = maxNSamples
 	//
-	nSamplesAfterTrigger, err := my.GetNSamples()
+	m.NSamplesAfterTrigger, err = my.GetNSamples()
 	if err != nil {
 		err = fmt.Errorf("failed to get nSamples from DAQ_MCU: %w", err)
 		return
-	}
-	if nSamplesAfterTrigger > maxNSamples {
-		// If this ever happens, we have actually lost the samples
-		// at the trigger time because they would have been overwritten.
-		nSamplesAfterTrigger = maxNSamples
 	}
 	//
 	m.ByteAddrOldestData, err = my.GetByteAddressOfOldestData()
@@ -646,7 +641,7 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 	if m.ByteAddrOldestData == m.ByteAddrNextData {
 		// Wrap-around has occurred while recording, so
 		// the recorded data completely fills the SRAM storage.
-		m.NSamplesInRecord = maxNSamples
+		m.NSamplesInRecord = m.MaxNSamples
 	} else {
 		// Wrap-around in SRAM address space did not happen happen, so
 		// we have fewer samples in the actual recording stored in SRAM.
@@ -662,8 +657,8 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 		m.TriggerSample = 0
 		m.NSamplesPreTrigger = 0
 	} else {
-		m.TriggerSample = m.NSamplesInRecord - nSamplesAfterTrigger
-		m.NSamplesPreTrigger = m.NSamplesInRecord - nSamplesAfterTrigger
+		m.TriggerSample = m.NSamplesInRecord - m.NSamplesAfterTrigger
+		m.NSamplesPreTrigger = m.NSamplesInRecord - m.NSamplesAfterTrigger
 	}
 	//
 	m.DTmicroseconds, err = my.GetSamplePeriod_us()
@@ -713,9 +708,9 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 		countMax /= 2
 	}
 	// These are the same for all channels in the AVR edaqs board.
-	m.FullScaleVoltage = make([]float64, nChannels)
-	m.FullScaleCount = make([]int, nChannels)
-	for ach := 0; ach < nChannels; ach++ {
+	m.FullScaleVoltage = make([]float64, m.NChannels)
+	m.FullScaleCount = make([]int, m.NChannels)
+	for ach := 0; ach < m.NChannels; ach++ {
 		m.FullScaleVoltage[ach] = vrefV / gain
 		m.FullScaleCount[ach] = countMax
 	}
@@ -748,6 +743,7 @@ func (my *AVR_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.Re
 	firstSampleSelected := 0
 	lastSampleSelected := meta.NSamplesInRecord
 	nSamplesSelected := meta.NSamplesInRecord
+	nSamplesPreTrigger := meta.NSamplesPreTrigger
 	// We might want to adjust the selection of samples to be a subset of the full record.
 	if ss != nil {
 		if meta.Mode == IMMEDIATE {
@@ -756,6 +752,7 @@ func (my *AVR_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.Re
 			firstSampleSelected = 0
 			lastSampleSelected = firstSampleSelected + ss.Total
 			nSamplesSelected = ss.Total
+			nSamplesPreTrigger = 0
 		} else {
 			// Because of potential wrap-around for other trigger modes,
 			// it may be that the selected first-sample index is zero.
@@ -763,13 +760,14 @@ func (my *AVR_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.Re
 			firstSampleSelected = meta.TriggerSample - ss.PreTrigger
 			lastSampleSelected = firstSampleSelected + ss.Total
 			nSamplesSelected = ss.Total
+			nSamplesPreTrigger = ss.PreTrigger
 		}
 	}
 	// Prepare the record of data that gets returned.
 	rec = edaqs.Record{
 		NChannels: nChannels,
 		NSamplesInRecord: nSamplesSelected,
-		NSamplesPreTrigger: meta.NSamplesPreTrigger,
+		NSamplesPreTrigger: nSamplesPreTrigger,
 		DTmicroseconds: meta.DTmicroseconds,
 		LateFlag: meta.LateFlag,
 		FullScaleVoltage: meta.FullScaleVoltage,

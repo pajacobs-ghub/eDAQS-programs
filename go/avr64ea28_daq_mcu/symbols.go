@@ -261,8 +261,8 @@ func (i TriggerMode) String() string {
 type TriggerSlope uint
 
 const (
-	SLOPE_POS TriggerSlope = 0
-	SLOPE_NEG TriggerSlope = 1
+	SLOPE_NEG TriggerSlope = 0
+	SLOPE_POS TriggerSlope = 1
 )
 
 func (i TriggerSlope) String() string {
