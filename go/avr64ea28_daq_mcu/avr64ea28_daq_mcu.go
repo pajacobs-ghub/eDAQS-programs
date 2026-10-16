@@ -606,7 +606,6 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 		return
 	}
 	m.MaxNSamples = maxNSamples
-	m.NSamplesInRecord = maxNSamples
 	//
 	nSamplesAfterTrigger, err := my.GetNSamples()
 	if err != nil {
@@ -644,6 +643,15 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 		err = fmt.Errorf("failed to get size of sample-set in bytes from DAQ_MCU: %w", err)
 		return
 	}
+	if m.ByteAddrOldestData == m.ByteAddrNextData {
+		// Wrap-around has occurred while recording, so
+		// the recorded data completely fills the SRAM storage.
+		m.NSamplesInRecord = maxNSamples
+	} else {
+		// Wrap-around in SRAM address space did not happen happen, so
+		// we have fewer samples in the actual recording stored in SRAM.
+		m.NSamplesInRecord = m.ByteAddrNextData / m.BytesPerSampleSet
+	}
 	//
 	m.Mode, err = my.GetTriggerMode()
 	if err != nil {
@@ -654,8 +662,8 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 		m.TriggerSample = 0
 		m.NSamplesPreTrigger = 0
 	} else {
-		m.TriggerSample = maxNSamples - nSamplesAfterTrigger
-		m.NSamplesPreTrigger = maxNSamples - nSamplesAfterTrigger
+		m.TriggerSample = m.NSamplesInRecord - nSamplesAfterTrigger
+		m.NSamplesPreTrigger = m.NSamplesInRecord - nSamplesAfterTrigger
 	}
 	//
 	m.DTmicroseconds, err = my.GetSamplePeriod_us()
