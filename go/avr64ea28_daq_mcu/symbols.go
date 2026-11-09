@@ -255,7 +255,7 @@ func (i TriggerMode) String() string {
 	case INTERNAL: return "INTERNAL"
 	case EXTERNAL: return "EXTERNAL"
 	}
-	return "UNKNOWN_TriggerMade"
+	return "UNKNOWN_TriggerMode"
 }
 
 type TriggerSlope uint

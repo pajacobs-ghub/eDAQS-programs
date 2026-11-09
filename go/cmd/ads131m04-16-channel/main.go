@@ -1,0 +1,76 @@
+// avr64ea28-1/main.go
+// Exercise the Pico2 + 4xADS131M04 recording board.
+//
+// Peter J. 2026-11-09 Adapted from the AVR64EA28 program.
+
+package main
+
+import (
+	"flag"
+	"fmt"
+	"go.bug.st/serial"
+	"log"
+	comms "example.com/edaqs/pic18f26q71_comms_4"
+	daq "example.com/edaqs/pico2_daq_4x_ads131m04"
+	"time"
+)
+
+func main() {
+	fmt.Println("Exercise the Pico2 + 4xADS131M04 recording board...")
+	ports, err := serial.GetPortsList()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if len(ports) == 0 {
+		log.Fatal("No serial ports found!")
+	}
+	for _, port := range ports {
+		fmt.Printf("Found port: %v\n", port)
+	}
+	// These default values may be overridden using command-line flags.
+	portName := flag.String("port", "/dev/ttyUSB0", "Name of the serial port")
+	baud := flag.Int("baud", 115200, "Baud rate (bits per second)")
+	timeStr := flag.String("timeout", "40ms", "Timeout, with units")
+	itest := flag.Int("test", 1, "Test number (look at the source to see what is available")
+	nodeId := flag.String("id", "G", "Single character node identity")
+	flag.Parse()
+	fmt.Printf("Selected serial port: %v\n", *portName)
+	fmt.Printf("Baud rate: %v\n", *baud)
+	fmt.Printf("When awaiting response, timeout: %v\n", *timeStr)
+	fmt.Printf("Node Id (single character): %v\n", *nodeId)
+	fmt.Printf("Test number: %d\n", *itest)
+	//
+	timeOut, err := time.ParseDuration(*timeStr)
+	if err != nil {
+		log.Fatal("failed to parse timeout: ", err)
+	}
+	mode := &serial.Mode{
+		BaudRate: *baud,
+	}
+	port, err := serial.Open(*portName, mode)
+	if err != nil {
+		log.Fatal("failed to open serial port: ", err)
+	}
+	err = port.SetReadTimeout(timeOut)
+	if err != nil {
+		log.Fatal("failed to set timeout: ", err)
+	}
+	// Keep a single byte for the node identity.
+	id := []byte(*nodeId)[0]
+	comms_mcu := comms.NewCOMMS_4_MCU(&port, id)
+	daq_mcu := daq.NewPico2_DAQ_MCU(comms_mcu)
+	//
+	switch *itest {
+	case 1:
+		ex_1_simple_interaction(comms_mcu, daq_mcu)
+	case 2:
+		ex_2_immediate_sample_set(comms_mcu, daq_mcu)
+		// case 3:
+		//      ex_3_immediate_short_recording(comms_mcu, daq_mcu, *nodeId)
+		//	case 4:
+		//		ex_4_transient_event_recording(comms_mcu, daq_mcu, *nodeId)
+	default:
+		fmt.Println("No test selected.")
+	}
+	fmt.Println("Done.")
+}

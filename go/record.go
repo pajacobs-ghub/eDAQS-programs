@@ -27,6 +27,7 @@ type Record struct {
 	NSamplesPreTrigger int
 	DTmicroseconds float64
 	LateFlag bool
+	LastErrorCode int
 	// The following slices will hold one value per channel.
 	FullScaleVoltage []float64
 	FullScaleCount []int
@@ -59,6 +60,7 @@ func (r Record) WriteMetaData(w *bufio.Writer) {
 	w.WriteString(fmt.Sprintf("%q : %g,\n", "dt_us", r.DTmicroseconds))
 	outBytes, _ := json.Marshal(r.LateFlag)
 	w.WriteString(fmt.Sprintf("%q : %s,\n", "late_flag", string(outBytes)))
+	w.WriteString(fmt.Sprintf("%q : %d,\n", "last_error_code", r.LastErrorCode))
 	outBytes, _ = json.Marshal(r.FullScaleVoltage)
 	w.WriteString(fmt.Sprintf("%q : %s,\n", "fullscale_voltage", string(outBytes)))
 	outBytes, _ = json.Marshal(r.FullScaleCount)
