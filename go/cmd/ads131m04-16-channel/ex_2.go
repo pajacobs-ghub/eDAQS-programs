@@ -27,10 +27,16 @@ func ex_2_immediate_sample_set(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.Pico2_
 	//
 	// Report sample set for default register settings.
 	_ = daq_mcu.SetRegistersToFactoryValues()
+	_ = daq_mcu.SetPGA(2, daq.X2)
+	_ = daq_mcu.SetPGA(3, daq.X2)
 	data, err := daq_mcu.ImmediateSampleSet()
 	if err != nil {
 		log.Printf("oops: %v\n", err)
 	}
 	fmt.Printf("Returned data: %v\n", data)
+	for i := 0; i < 4; i++ {
+		g, _ := daq_mcu.GetAnalogGain(i)
+		fmt.Printf("AIN_%d gain=%g\n", i, g)
+	}
 	return
 }

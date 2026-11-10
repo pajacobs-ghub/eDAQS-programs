@@ -10,7 +10,7 @@ import (
 
 type RegIndex uint
 
-const NReg = 9
+const NReg = 13
 
 const (
 	MCLK_KHZ RegIndex = 0
@@ -22,6 +22,10 @@ const (
 	TRIG_CHAN RegIndex = 6
 	TRIG_LEVEL RegIndex = 7
 	TRIG_SLOPE RegIndex = 8
+	GAIN_AIN0 RegIndex = 9
+	GAIN_AIN1 RegIndex = 10
+	GAIN_AIN2 RegIndex = 11
+	GAIN_AIN3 RegIndex = 12
 )
 
 func (i RegIndex) String() string {
@@ -35,6 +39,10 @@ func (i RegIndex) String() string {
 	case TRIG_CHAN: return "TRIG_CHAN"
 	case TRIG_LEVEL: return "TRIG_LEVEL"
 	case TRIG_SLOPE: return "TRIG_SLOPE"
+	case GAIN_AIN0: return "GAIN_AIN0"
+	case GAIN_AIN1: return "GAIN_AIN1"
+	case GAIN_AIN2: return "GAIN_AIN2"
+	case GAIN_AIN3: return "GAIN_AIN3"
 	}
 	return "UNKNOWN"
 }

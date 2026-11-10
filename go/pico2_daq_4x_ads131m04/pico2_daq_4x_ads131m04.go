@@ -166,16 +166,32 @@ func (my *Pico2_DAQ_MCU) GetPower() (pwr PowerSelect, err error) {
 	return
 }
 
-func (my *Pico2_DAQ_MCU) SetPGA(chip int, channel int, gain PGAGain) (err error) {
-	_ = chip
-	_ = channel
-	_ = gain
+func (my *Pico2_DAQ_MCU) SetPGA(channel int, gain PGAGain) (err error) {
+	// All ADS131M04 chips receive the same set of gains.
+	switch channel {
+	case 0: err = my.SetRegValue(GAIN_AIN0, int(gain))
+	case 1: err = my.SetRegValue(GAIN_AIN1, int(gain))
+	case 2: err = my.SetRegValue(GAIN_AIN2, int(gain))
+	case 3: err = my.SetRegValue(GAIN_AIN3, int(gain))
+	default:
+		err = fmt.Errorf("invalid channel: %d", channel);
+		return
+	}
 	return
 }
 
-func (my *Pico2_DAQ_MCU) GetAnalogGain(chip int, channel int) (gain PGAGain, err error) {
-	_ = chip
-	_ = channel
+func (my *Pico2_DAQ_MCU) GetAnalogGain(channel int) (gain float64, err error) {
+	var i int
+	switch channel {
+	case 0: i, err = my.GetRegValue(GAIN_AIN0)
+	case 1: i, err = my.GetRegValue(GAIN_AIN1)
+	case 2: i, err = my.GetRegValue(GAIN_AIN2)
+	case 3: i, err = my.GetRegValue(GAIN_AIN3)
+	default:
+		err = fmt.Errorf("invalid channel: %d", channel);
+		return
+	}
+	gain = PGAGain(i).Float()
 	return
 }
 
@@ -324,7 +340,7 @@ func (my *Pico2_DAQ_MCU) GetSampleSet(i int) (vals []int, err error) {
 }
 
 // Returns a code for the last error logged during sampling.
-func (my *Pico2_DAQ_MCU) LastError() (
+func (my *Pico2_DAQ_MCU) LastError() (didNotKeepUpDuringSampling int,
 	sampleErrorCode int, exchangeErrorCode int, dmaUnfinishedMask uint,
 	err error) {
 	var resp []byte
@@ -333,8 +349,8 @@ func (my *Pico2_DAQ_MCU) LastError() (
 		err = fmt.Errorf("error while getting last error codes: %w", err)
 		return
 	}
-	_, err = fmt.Sscanf(string(resp), "%d %d %u", &sampleErrorCode,
-		&exchangeErrorCode, &dmaUnfinishedMask)
+	_, err = fmt.Sscanf(string(resp), "%d %d %d %u", &didNotKeepUpDuringSampling,
+		&sampleErrorCode, &exchangeErrorCode, &dmaUnfinishedMask)
 	return
 }
 
@@ -472,6 +488,7 @@ type RecordMetaData struct {
 	OSR int
 	DTmicroseconds float64
 	LastErrorCode int
+	LateFlag bool
 	// The following slices will hold one value per channel.
 	FullScaleVoltage []float64
 	FullScaleCount []int
@@ -562,11 +579,13 @@ func (my *Pico2_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 	// Data sample period is then set by the over-sampling ratio.
 	m.DTmicroseconds = dtMod * float64(m.OSR)
 	//
-	m.LastErrorCode, _, _, err = my.LastError()
+	var iLate int
+	iLate, m.LastErrorCode, _, _, err = my.LastError()
 	if err != nil {
 		err = fmt.Errorf("failed to get last error code from DAQ_MCU: %w", err)
 		return
 	}
+	m.LateFlag = iLate == 1
 	//
 	// Characterize the analog voltage scaling.
 	//
@@ -630,7 +649,7 @@ func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.
 		NSamplesInRecord: nSamplesSelected,
 		NSamplesPreTrigger: nSamplesPreTrigger,
 		DTmicroseconds: meta.DTmicroseconds,
-		LateFlag: false,
+		LateFlag: meta.LateFlag,
 		LastErrorCode: meta.LastErrorCode,
 		FullScaleVoltage: meta.FullScaleVoltage,
 		FullScaleCount: meta.FullScaleCount,
