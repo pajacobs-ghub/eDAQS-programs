@@ -1,5 +1,5 @@
-// file: avr64ea28_daq_mcu.go
-// Service functions for the AVR64EA28 DAQ MCU.
+// file: pico2_daq_4x_ads131m04.go
+// Service functions for the Pico2 DAQ MCU driving 4x ADS131M04 analog converter chips..
 //
 // Peter J.
 // 2026-09-22: Started rebuilding from the Python functions.
@@ -166,31 +166,16 @@ func (my *Pico2_DAQ_MCU) GetPower() (pwr PowerSelect, err error) {
 	return
 }
 
-func (my *Pico2_DAQ_MCU) SetPGA(channel int, gain PGAGain) (err error) {
-	// All ADS131M04 chips receive the same set of gains.
-	switch channel {
-	case 0: err = my.SetRegValue(GAIN_AIN0, int(gain))
-	case 1: err = my.SetRegValue(GAIN_AIN1, int(gain))
-	case 2: err = my.SetRegValue(GAIN_AIN2, int(gain))
-	case 3: err = my.SetRegValue(GAIN_AIN3, int(gain))
-	default:
-		err = fmt.Errorf("invalid channel: %d", channel);
-		return
-	}
+func (my *Pico2_DAQ_MCU) SetPGA(ichip int, ichan int, gain PGAGain) (err error) {
+	ireg := int(GAIN_AIN0_0) + ichip*4 + ichan
+	err = my.SetRegValue(RegIndex(ireg), int(gain))
 	return
 }
 
-func (my *Pico2_DAQ_MCU) GetAnalogGain(channel int) (gain float64, err error) {
+func (my *Pico2_DAQ_MCU) GetAnalogGain(ichip int, ichan int) (gain float64, err error) {
+	ireg := int(GAIN_AIN0_0) + ichip*4 + ichan
 	var i int
-	switch channel {
-	case 0: i, err = my.GetRegValue(GAIN_AIN0)
-	case 1: i, err = my.GetRegValue(GAIN_AIN1)
-	case 2: i, err = my.GetRegValue(GAIN_AIN2)
-	case 3: i, err = my.GetRegValue(GAIN_AIN3)
-	default:
-		err = fmt.Errorf("invalid channel: %d", channel);
-		return
-	}
+	i, err = my.GetRegValue(RegIndex(ireg))
 	gain = PGAGain(i).Float()
 	return
 }
@@ -589,15 +574,19 @@ func (my *Pico2_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 	//
 	// Characterize the analog voltage scaling.
 	//
-	// These are the same for all channels, just for the moment.
-	gain := 1.0
 	vrefV := 1.2
 	countMax := 1 << 23
 	m.FullScaleVoltage = make([]float64, m.NChannels)
 	m.FullScaleCount = make([]int, m.NChannels)
-	for ach := 0; ach < m.NChannels; ach++ {
-		m.FullScaleVoltage[ach] = vrefV / gain
-		m.FullScaleCount[ach] = countMax
+	for ichip := 0; ichip < 4; ichip++ {
+		for ichan := 0; ichan < 4; ichan++ {
+			ach := 4*ichip + ichan
+			if ach < m.NChannels {
+				gain, _ := my.GetAnalogGain(ichip, ichan)
+				m.FullScaleVoltage[ach] = vrefV / gain
+				m.FullScaleCount[ach] = countMax
+			}
+		}
 	}
 	//
 	return

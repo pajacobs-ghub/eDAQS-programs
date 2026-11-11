@@ -10,7 +10,7 @@ import (
 
 type RegIndex uint
 
-const NReg = 13
+const NReg = 25
 
 const (
 	MCLK_KHZ RegIndex = 0
@@ -22,10 +22,22 @@ const (
 	TRIG_CHAN RegIndex = 6
 	TRIG_LEVEL RegIndex = 7
 	TRIG_SLOPE RegIndex = 8
-	GAIN_AIN0 RegIndex = 9
-	GAIN_AIN1 RegIndex = 10
-	GAIN_AIN2 RegIndex = 11
-	GAIN_AIN3 RegIndex = 12
+	GAIN_AIN0_0 RegIndex = 9
+	GAIN_AIN1_0 RegIndex = 10
+	GAIN_AIN2_0 RegIndex = 11
+	GAIN_AIN3_0 RegIndex = 12
+	GAIN_AIN0_1 RegIndex = 13
+	GAIN_AIN1_1 RegIndex = 14
+	GAIN_AIN2_1 RegIndex = 15
+	GAIN_AIN3_1 RegIndex = 16
+	GAIN_AIN0_2 RegIndex = 17
+	GAIN_AIN1_2 RegIndex = 18
+	GAIN_AIN2_2 RegIndex = 19
+	GAIN_AIN3_2 RegIndex = 20
+	GAIN_AIN0_3 RegIndex = 21
+	GAIN_AIN1_3 RegIndex = 22
+	GAIN_AIN2_3 RegIndex = 23
+	GAIN_AIN3_3 RegIndex = 24
 )
 
 func (i RegIndex) String() string {
@@ -39,10 +51,22 @@ func (i RegIndex) String() string {
 	case TRIG_CHAN: return "TRIG_CHAN"
 	case TRIG_LEVEL: return "TRIG_LEVEL"
 	case TRIG_SLOPE: return "TRIG_SLOPE"
-	case GAIN_AIN0: return "GAIN_AIN0"
-	case GAIN_AIN1: return "GAIN_AIN1"
-	case GAIN_AIN2: return "GAIN_AIN2"
-	case GAIN_AIN3: return "GAIN_AIN3"
+	case GAIN_AIN0_0: return "GAIN_AIN0_0"
+	case GAIN_AIN1_0: return "GAIN_AIN1_0"
+	case GAIN_AIN2_0: return "GAIN_AIN2_0"
+	case GAIN_AIN3_0: return "GAIN_AIN3_0"
+	case GAIN_AIN0_1: return "GAIN_AIN0_1"
+	case GAIN_AIN1_1: return "GAIN_AIN1_1"
+	case GAIN_AIN2_1: return "GAIN_AIN2_1"
+	case GAIN_AIN3_1: return "GAIN_AIN3_1"
+	case GAIN_AIN0_2: return "GAIN_AIN0_2"
+	case GAIN_AIN1_2: return "GAIN_AIN1_2"
+	case GAIN_AIN2_2: return "GAIN_AIN2_2"
+	case GAIN_AIN3_2: return "GAIN_AIN3_2"
+	case GAIN_AIN0_3: return "GAIN_AIN0_3"
+	case GAIN_AIN1_3: return "GAIN_AIN1_3"
+	case GAIN_AIN2_3: return "GAIN_AIN2_3"
+	case GAIN_AIN3_3: return "GAIN_AIN3_3"
 	}
 	return "UNKNOWN"
 }

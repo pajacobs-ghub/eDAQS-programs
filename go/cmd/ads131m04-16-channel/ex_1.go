@@ -1,4 +1,6 @@
 // ex_1.go
+// Basic interactions with the PIC18F26Q71 COMMS-4 MCU and the Pico2 DAQ-MCU.
+//
 // Peter J. 2026-09-22 Built up from the simple-terminal program.
 
 package main

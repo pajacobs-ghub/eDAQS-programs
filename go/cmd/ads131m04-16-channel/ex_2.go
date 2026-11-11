@@ -1,4 +1,5 @@
 // ex_2.go
+// Immediate samples set.
 // Peter J. 2026-10-01
 
 package main
@@ -27,16 +28,18 @@ func ex_2_immediate_sample_set(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.Pico2_
 	//
 	// Report sample set for default register settings.
 	_ = daq_mcu.SetRegistersToFactoryValues()
-	_ = daq_mcu.SetPGA(2, daq.X2)
-	_ = daq_mcu.SetPGA(3, daq.X2)
+	_ = daq_mcu.SetPGA(0, 2, daq.X2)
+	_ = daq_mcu.SetPGA(3, 3, daq.X2)
 	data, err := daq_mcu.ImmediateSampleSet()
 	if err != nil {
 		log.Printf("oops: %v\n", err)
 	}
 	fmt.Printf("Returned data: %v\n", data)
-	for i := 0; i < 4; i++ {
-		g, _ := daq_mcu.GetAnalogGain(i)
-		fmt.Printf("AIN_%d gain=%g\n", i, g)
+	for ichip := 0; ichip < 4; ichip++ {
+		for ichan := 0; ichan < 4; ichan++ {
+			g, _ := daq_mcu.GetAnalogGain(ichip, ichan)
+			fmt.Printf("AIN%d_%d gain=%g\n", ichan, ichip, g)
+		}
 	}
 	return
 }

@@ -1,4 +1,4 @@
-// avr64ea28-1/main.go
+// ads131m04-16-channel/main.go
 // Exercise the Pico2 + 4xADS131M04 recording board.
 //
 // Peter J. 2026-11-09 Adapted from the AVR64EA28 program.
