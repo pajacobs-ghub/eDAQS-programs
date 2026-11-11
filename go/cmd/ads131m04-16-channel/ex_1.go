@@ -8,7 +8,7 @@ import (
 	"log"
 	comms "example.com/edaqs/pic18f26q71_comms_4"
 	daq "example.com/edaqs/pico2_daq_4x_ads131m04"
-	_ "time"
+	"time"
 )
 
 func ex_1_simple_interaction(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.Pico2_DAQ_MCU) {
@@ -30,6 +30,17 @@ func ex_1_simple_interaction(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.Pico2_DA
 	// err = comms_mcu.SetLED(1)
 	// time.Sleep(2 * time.Second)
 	// err = comms_mcu.SetLED(0)
+    fmt.Println("Turn on LED attached to RA7.")
+    // bits                                      decimal
+    //    7    6    5    4    3    2    1    0    value
+    //    X    X    X    X  RA7  RA6  RA5  RA4
+    //    0    0    0    0    0    1    1    1  ==  7
+    //    0    0    0    0    1    0    0    0  ==  8
+    _ = comms_mcu.UtilityPinsWriteANSEL(7) // RA7 as digital; others analog
+    _ = comms_mcu.UtilityPinsWriteTRIS(7) // RA7 as output; others input
+    _ = comms_mcu.UtilityPinsWriteLAT(8) // set RA7 high to turn LED on
+	time.Sleep(2 * time.Second)
+    _ = comms_mcu.UtilityPinsWriteLAT(0) // turn LED off
 	//
 	if eventFlag, err := comms_mcu.Check_EventHasPassed(); err == nil {
 		if eventFlag {
