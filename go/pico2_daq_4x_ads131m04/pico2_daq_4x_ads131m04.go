@@ -659,7 +659,7 @@ func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.
 		}
 		sampleData, err = my.GetSampleSet(ii)
 		if err != nil {
-			err = fmt.Errorf("error while getting sample set %d: %v", i, err)
+			err = fmt.Errorf("error while getting sample set %d: %w", i, err)
 			break
 		}
 		for ach := 0; ach < nChannels; ach++ {

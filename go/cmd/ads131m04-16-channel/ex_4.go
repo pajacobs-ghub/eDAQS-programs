@@ -28,12 +28,18 @@ func ex_4_transient_event_recording(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.P
 	//
 	_ = comms_mcu.ReleaseEventLine()
 	_ = comms_mcu.Reset_DAQ_MCU()
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	_ = daq_mcu.SetRegistersToFactoryValues()
 	_ = daq_mcu.SetPGA(0, 2, daq.X2)
 	_ = daq_mcu.SetPGA(3, 0, daq.X2) // Corresponds to channel 12 (from range 0..15)
 	_ = daq_mcu.SetTriggerInternal(12, 50000, daq.SLOPE_POS)
 	_ = daq_mcu.SetNSamples(100)
+	vals, err := daq_mcu.GetAllRegValuesAsString()
+	if err != nil {
+		log.Printf("error getting vreg values: %v", err)
+		return
+	}
+	fmt.Printf("after set-up, register values: %s\n", vals)
 	time.Sleep(1 * time.Second)
 	//
 	if ready, _ := comms_mcu.Check_DAQ_MCU_Ready(); !ready {

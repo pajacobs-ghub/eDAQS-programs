@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"fmt"
 	"go.bug.st/serial"
-	"log"
 	edaqs "example.com/edaqs"
 	"strconv"
 )
@@ -43,21 +42,21 @@ func (node *COMMS_4_MCU) Command_COMMS_MCU(btext []byte) (resp []byte, err error
 	cmdByte := btext[0]
 	_, err = node.SendMessage(btext)
 	if err != nil {
-		log.Printf("error sending message: %v\n", err)
+		fmt.Errorf("error sending message: %w", err)
 		return
 	}
 	resp, _, err = node.FetchResponse()
 	if err != nil {
-		log.Printf("error fetching response: %v\n", err)
+		fmt.Errorf("error fetching response: %w", err)
 		return
 	}
 	if bytes.Contains(resp, []byte("error")) {
-		err = fmt.Errorf("response contains error message: %v", string(resp))
+		err = fmt.Errorf("response contains error message: %w", string(resp))
 		return
 	}
 	resp = bytes.Trim(resp, " ")
 	if resp[0] != cmdByte {
-		err = fmt.Errorf("response string did not start with command byte: %v", string(resp))
+		err = fmt.Errorf("response string did not start with command byte: %w", string(resp))
 		return
 	}
 	resp = bytes.Trim(resp[1:], " ")
@@ -137,7 +136,7 @@ func (node *COMMS_4_MCU) I2CWrite(addr7bit uint8, byteArray []byte) (bytesWritte
 	var resp []byte
 	resp, err = node.Command_COMMS_MCU([]byte(cmdTxt))
 	if err != nil {
-		err = fmt.Errorf("I2C write error: %v", err)
+		err = fmt.Errorf("I2C write error: %w", err)
 		return
 	}
 	items := bytes.Fields(resp)
@@ -164,7 +163,7 @@ func (node *COMMS_4_MCU) I2CRead(addr7bit uint8, n uint) (bytesRead []byte, err 
 	var resp []byte
 	resp, err = node.Command_COMMS_MCU([]byte(cmdTxt))
 	if err != nil {
-		err = fmt.Errorf("I2C read error: %v", err)
+		err = fmt.Errorf("I2C read error: %w", err)
 		return
 	}
 	items := bytes.Fields(resp)
@@ -190,7 +189,7 @@ func (node *COMMS_4_MCU) SPIInit(upin uint, ckp uint, cke uint, smp uint) (err e
 	cmdTxt := fmt.Sprintf("c i %d %d %d %d", upin, ckp, cke, smp)
 	_, err = node.Command_COMMS_MCU([]byte(cmdTxt))
 	if err != nil {
-		err = fmt.Errorf("SPI initialization error: %v", err)
+		err = fmt.Errorf("SPI initialization error: %w", err)
 		return
 	}
 	return
@@ -199,7 +198,7 @@ func (node *COMMS_4_MCU) SPIInit(upin uint, ckp uint, cke uint, smp uint) (err e
 func (node *COMMS_4_MCU) SPIClose() (err error) {
 	_, err = node.Command_COMMS_MCU([]byte("c c"))
 	if err != nil {
-		err = fmt.Errorf("SPI close error: %v", err)
+		err = fmt.Errorf("SPI close error: %w", err)
 		return
 	}
 	return
@@ -213,7 +212,7 @@ func (node *COMMS_4_MCU) SPIExchange(outgoingBytes []byte) (incomingBytes []byte
 	var resp []byte
 	resp, err = node.Command_COMMS_MCU([]byte(cmdTxt))
 	if err != nil {
-		err = fmt.Errorf("SPI exchange error: %v", err)
+		err = fmt.Errorf("SPI exchange error: %w", err)
 		return
 	}
 	items := bytes.Fields(resp)
