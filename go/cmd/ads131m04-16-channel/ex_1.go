@@ -28,11 +28,7 @@ func ex_1_simple_interaction(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.Pico2_DA
 		fmt.Printf("DAQ_MCU version string: %v\n", string(response2Bytes))
 	}
 	//
-	// Light up the LED for 2 seconds
-	// err = comms_mcu.SetLED(1)
-	// time.Sleep(2 * time.Second)
-	// err = comms_mcu.SetLED(0)
-    fmt.Println("Turn on LED attached to RA7.")
+    fmt.Println("Briefly turn on LED attached to RA7.")
     // bits                                      decimal
     //    7    6    5    4    3    2    1    0    value
     //    X    X    X    X  RA7  RA6  RA5  RA4
@@ -43,6 +39,41 @@ func ex_1_simple_interaction(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.Pico2_DA
     _ = comms_mcu.UtilityPinsWriteLAT(8) // set RA7 high to turn LED on
 	time.Sleep(2 * time.Second)
     _ = comms_mcu.UtilityPinsWriteLAT(0) // turn LED off
+	//
+	// Attempt to read the current room temperature from an attached TC74A0
+	myBytes, err := comms_mcu.I2CRead(72, 1)
+	if err != nil {
+		log.Printf("I2C read error: %v\n", err)
+	}
+	if myBytes != nil {
+		fmt.Printf("I2C bytes read: %v (should be room temperature in degrees C)\n", myBytes)
+	}
+	myBytes, _ = comms_mcu.I2CWrite(72, []byte{1,})
+	if myBytes != nil {
+		fmt.Printf("I2C bytes written: %v (next reading from status register)\n", myBytes)
+	}
+	myBytes, _ = comms_mcu.I2CRead(72, 1)
+	if myBytes != nil {
+		fmt.Printf("I2C bytes read: %v (should be 64 as content of status register)\n", myBytes)
+	}
+	myBytes, _ = comms_mcu.I2CWrite(72, []byte{0,})
+	if myBytes != nil {
+		fmt.Printf("I2C bytes written: %v (next reading from temperature register)\n", myBytes)
+	}
+	myBytes, _ = comms_mcu.I2CRead(72, 1)
+	if myBytes != nil {
+		fmt.Printf("I2C bytes read: %v (should again be room temperature in degrees C)\n", myBytes)
+	}
+	//
+	// Exchange some bytes via SPI.
+	// There does not need to be a device attached.
+	// We can just use a logic analyser to check.
+	_ = comms_mcu.SPIInit(3, 1, 0, 0)
+	myBytes, _ = comms_mcu.SPIExchange([]byte{0, 1, 2, 3,})
+	if myBytes != nil {
+		fmt.Printf("SPI incoming bytes: %v (255 if no device is attached)\n", myBytes)
+	}
+	_ = comms_mcu.SPIClose()
 	//
 	if eventFlag, err := comms_mcu.Check_EventHasPassed(); err == nil {
 		if eventFlag {

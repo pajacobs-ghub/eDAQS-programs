@@ -14,6 +14,7 @@ import (
 	"go.bug.st/serial"
 	"log"
 	edaqs "example.com/edaqs"
+	"strconv"
 )
 
 type COMMS_4_MCU struct {
@@ -128,12 +129,110 @@ func (node *COMMS_4_MCU) UtilityPinsWriteWPU(val int) (err error) {
 	return
 }
 
-// TODO 2026-11-09 PJ Implement the UtilityPins functions
-//   I2CWrite
-//   I2CRead
-//   SPIInit
-//   SPIClose
-//   SPIExchange
+func (node *COMMS_4_MCU) I2CWrite(addr7bit uint8, byteArray []byte) (bytesWritten []byte, err error) {
+	cmdTxt := fmt.Sprintf("b w %d %d", addr7bit, len(byteArray))
+	for i := 0; i < len(byteArray); i++ {
+		cmdTxt += fmt.Sprintf(" %d", byteArray[i])
+	}
+	var resp []byte
+	resp, err = node.Command_COMMS_MCU([]byte(cmdTxt))
+	if err != nil {
+		err = fmt.Errorf("I2C write error: %v", err)
+		return
+	}
+	items := bytes.Fields(resp)
+	// First item should be 'w'.
+	// Second item should be 7-bit address.
+	// Third item should be number of bytes outgoing.
+	// The bytes to be written then follow.
+	var nbytes int
+	if len(items) > 2 {
+		nbytes, err = strconv.Atoi(string(items[2]))
+	}
+	if nbytes > 0 {
+		bytesWritten = make([]byte, nbytes)
+		for i := 0; i < nbytes; i++ {
+			b, _ := strconv.Atoi(string(items[3+i]))
+			bytesWritten[i] = byte(b)
+		}
+	}
+	return
+}
+
+func (node *COMMS_4_MCU) I2CRead(addr7bit uint8, n uint) (bytesRead []byte, err error) {
+	cmdTxt := fmt.Sprintf("b r %d %d", addr7bit, n)
+	var resp []byte
+	resp, err = node.Command_COMMS_MCU([]byte(cmdTxt))
+	if err != nil {
+		err = fmt.Errorf("I2C read error: %v", err)
+		return
+	}
+	items := bytes.Fields(resp)
+	// First item should be 'r'.
+	// Second item should be 7-bit address.
+	// Third item should be number of bytes incoming.
+	// The actual bytes follow.
+	var nbytes int
+	if len(items) > 2 {
+		nbytes, err = strconv.Atoi(string(items[2]))
+	}
+	if nbytes > 0 {
+		bytesRead = make([]byte, nbytes)
+		for i := 0; i < nbytes; i++ {
+			b, _ := strconv.Atoi(string(items[3+i]))
+			bytesRead[i] = byte(b)
+		}
+	}
+	return
+}
+
+func (node *COMMS_4_MCU) SPIInit(upin uint, ckp uint, cke uint, smp uint) (err error) {
+	cmdTxt := fmt.Sprintf("c i %d %d %d %d", upin, ckp, cke, smp)
+	_, err = node.Command_COMMS_MCU([]byte(cmdTxt))
+	if err != nil {
+		err = fmt.Errorf("SPI initialization error: %v", err)
+		return
+	}
+	return
+}
+
+func (node *COMMS_4_MCU) SPIClose() (err error) {
+	_, err = node.Command_COMMS_MCU([]byte("c c"))
+	if err != nil {
+		err = fmt.Errorf("SPI close error: %v", err)
+		return
+	}
+	return
+}
+
+func (node *COMMS_4_MCU) SPIExchange(outgoingBytes []byte) (incomingBytes []byte, err error) {
+	cmdTxt := fmt.Sprintf("c e %d", len(outgoingBytes))
+	for i := 0; i < len(outgoingBytes); i++ {
+		cmdTxt += fmt.Sprintf(" %d", outgoingBytes[i])
+	}
+	var resp []byte
+	resp, err = node.Command_COMMS_MCU([]byte(cmdTxt))
+	if err != nil {
+		err = fmt.Errorf("SPI exchange error: %v", err)
+		return
+	}
+	items := bytes.Fields(resp)
+	// First item should be 'e'.
+	// Second item should be number of bytes incoming.
+	// The bytes then follow.
+	var nbytes int
+	if len(items) > 1 {
+		nbytes, err = strconv.Atoi(string(items[1]))
+	}
+	if nbytes > 0 {
+		incomingBytes = make([]byte, nbytes)
+		for i := 0; i < nbytes; i++ {
+			b, _ := strconv.Atoi(string(items[2+i]))
+			incomingBytes[i] = byte(b)
+		}
+	}
+	return
+}
 
 func (node *COMMS_4_MCU) AssertEventLineLow() (err error) {
 	_, err = node.Command_COMMS_MCU([]byte("t"))

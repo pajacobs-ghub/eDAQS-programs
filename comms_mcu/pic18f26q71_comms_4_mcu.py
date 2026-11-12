@@ -108,8 +108,8 @@ class PIC18F26Q71_COMMS_4_MCU(object):
             raise RuntimeError(f"spi_exchange error: {txt}")
         items = txt.split()
         if items[0] == 'e':
-            nbytes = int(items[2])
-            bytes_read = [int(item) for item in items[3:]]
+            nbytes = int(items[1])
+            bytes_read = [int(item) for item in items[2:]]
         else:
             bytes_read = []
         return bytes_read
