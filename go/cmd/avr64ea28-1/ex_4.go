@@ -48,7 +48,6 @@ func ex_4_transient_event_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 	_ = daq_mcu.SetPGA(daq.X4)
 	_ = daq_mcu.SetAnalogRefVoltage(daq.Vref1024)
 	//
-	// Report sample set an immediate-mode recording.
 	_ = daq_mcu.SetSamplePeriod_us(1000)
 	_ = daq_mcu.SetTriggerInternal(0, 50, daq.SLOPE_POS)
 	_ = daq_mcu.SetNSamples(100)

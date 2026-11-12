@@ -301,7 +301,7 @@ func (my *Pico2_DAQ_MCU) StartSampling() (err error) {
 // Returns the values of the recorded sample set i,
 // where i is counted from the oldest recorded sample (i=0).
 //
-// The AVR reports these values as a string of space-separated integers.
+// The Pico2 reports these values as a string of space-separated integers.
 func (my *Pico2_DAQ_MCU) GetSampleSet(i int) (vals []int, err error) {
 	cmd := fmt.Sprintf("P %d", i)
 	var resp []byte
