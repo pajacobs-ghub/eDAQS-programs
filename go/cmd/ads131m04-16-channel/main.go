@@ -65,8 +65,8 @@ func main() {
 		ex_1_simple_interaction(comms_mcu, daq_mcu)
 	case 2:
 		ex_2_immediate_sample_set(comms_mcu, daq_mcu)
-		// case 3:
-		//      ex_3_immediate_short_recording(comms_mcu, daq_mcu, *nodeId)
+	case 3:
+		ex_3_immediate_short_recording(comms_mcu, daq_mcu, *nodeId)
 		//	case 4:
 		//		ex_4_transient_event_recording(comms_mcu, daq_mcu, *nodeId)
 	default:

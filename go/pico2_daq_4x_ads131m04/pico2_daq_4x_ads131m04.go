@@ -334,7 +334,7 @@ func (my *Pico2_DAQ_MCU) LastError() (didNotKeepUpDuringSampling int,
 		err = fmt.Errorf("error while getting last error codes: %w", err)
 		return
 	}
-	_, err = fmt.Sscanf(string(resp), "%d %d %d %u", &didNotKeepUpDuringSampling,
+	_, err = fmt.Sscanf(string(resp), "%d %d %d %d", &didNotKeepUpDuringSampling,
 		&sampleErrorCode, &exchangeErrorCode, &dmaUnfinishedMask)
 	return
 }
