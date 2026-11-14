@@ -69,8 +69,8 @@ func ex_4_transient_event_recording(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.P
 		time.Sleep(1 * time.Second)
 	}
 	fmt.Println("DAQ_MCU is ready.")
-	sSelect := daq.SampleSelection{PreTrigger: 50, Total: 150}
-	rec, err := daq_mcu.GetRecordedDataByIndex(true, &sSelect)
+	options := daq.FetchOptions{PreTrigger: 50, TotalSamples: 150, Packed: true}
+	rec, err := daq_mcu.GetRecordedDataByIndex(&options)
 	if err != nil {
 		log.Printf("oops: %v\n", err)
 	}

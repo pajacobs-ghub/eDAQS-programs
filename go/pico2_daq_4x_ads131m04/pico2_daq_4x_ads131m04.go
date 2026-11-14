@@ -318,13 +318,13 @@ func crc16b(data []byte, n int, remainder uint16) uint16 {
 
 // Returns the values of the recorded sample set i,
 // where i is counted from the oldest recorded sample (i=0).
-//
-// The Pico2 reports these values as a string of space-separated integers.
-func (my *Pico2_DAQ_MCU) GetSampleSet(i int, b64 bool) (vals []int, err error) {
+func (my *Pico2_DAQ_MCU) GetSampleSet(i int, packed bool) (vals []int, err error) {
 	var cmd string
-	if b64 {
+	if packed {
+		// Get sample values as a packed base64 string.
 		cmd = fmt.Sprintf("B %d", i)
 	} else {
+		// Get sample values as space-separated decimal numbers.
 		cmd = fmt.Sprintf("P %d", i)
 	}
 	var resp []byte
@@ -334,7 +334,7 @@ func (my *Pico2_DAQ_MCU) GetSampleSet(i int, b64 bool) (vals []int, err error) {
 		return
 	}
 	items := strings.Fields(string(resp))
-	if b64 {
+	if packed {
 		// The two string items are a 64 character string representing
 		// the 16 24-bit analog values (encoded in base64),
 		// followed by a 4-character hexadecimal string
@@ -657,12 +657,14 @@ func (my *Pico2_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 	return
 }
 
-type SampleSelection struct {
+type FetchOptions struct {
 	PreTrigger int
-	Total int
+	TotalSamples int
+	Packed bool
+	PrintCount int
 }
 
-func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(b64 bool, ss *SampleSelection) (rec edaqs.Record, err error) {
+func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(options *FetchOptions) (rec edaqs.Record, err error) {
 	meta, err := my.GetRecordMetaData()
 	if err != nil {
 		err = fmt.Errorf("failed to get metadata for record: %w", err)
@@ -679,22 +681,22 @@ func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(b64 bool, ss *SampleSelection) (
 	nSamplesSelected := meta.NSamplesInRecord
 	nSamplesPreTrigger := meta.NSamplesPreTrigger
 	// We might want to adjust the selection of samples to be a subset of the full record.
-	if ss != nil {
+	if options != nil {
 		if meta.Mode == IMMEDIATE {
 			// For IMMEDIATE mode, the trigger sample is always at index zero.
 			// There are no sample data at the other end of SRAM to wrap around.
 			firstSampleSelected = 0
-			lastSampleSelected = firstSampleSelected + ss.Total
-			nSamplesSelected = ss.Total
+			lastSampleSelected = firstSampleSelected + options.TotalSamples
+			nSamplesSelected = options.TotalSamples
 			nSamplesPreTrigger = 0
 		} else {
 			// Because of potential wrap-around for other trigger modes,
 			// it may be that the selected first-sample index is zero.
 			// We will hanfle this wrap-around below.
-			firstSampleSelected = meta.TriggerSample - ss.PreTrigger
-			lastSampleSelected = firstSampleSelected + ss.Total
-			nSamplesSelected = ss.Total
-			nSamplesPreTrigger = ss.PreTrigger
+			firstSampleSelected = meta.TriggerSample - options.PreTrigger
+			lastSampleSelected = firstSampleSelected + options.TotalSamples
+			nSamplesSelected = options.TotalSamples
+			nSamplesPreTrigger = options.PreTrigger
 		}
 	}
 	// Prepare the record of data that gets returned.
@@ -713,6 +715,10 @@ func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(b64 bool, ss *SampleSelection) (
 	wrapN := meta.MaxNSamples;
 	// The first sample selected (the oldest) is assigned as (new) index zero.
 	jj := 0
+	var packed bool
+	if options != nil {
+		packed = options.Packed
+	}
 	for i := firstSampleSelected; i < lastSampleSelected; i++ {
 		// We may need to unwrap the index.
 		ii := i
@@ -722,7 +728,7 @@ func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(b64 bool, ss *SampleSelection) (
 		for ii >= wrapN {
 			ii -= wrapN
 		}
-		sampleData, err = my.GetSampleSet(ii, b64)
+		sampleData, err = my.GetSampleSet(ii, packed)
 		if err != nil {
 			err = fmt.Errorf("error while getting sample set %d: %w", i, err)
 			break
