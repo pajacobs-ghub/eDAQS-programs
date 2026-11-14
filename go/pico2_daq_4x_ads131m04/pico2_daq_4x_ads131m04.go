@@ -8,6 +8,7 @@
 package pico2_daq_4x_ads131m04
 
 import (
+	base64 "encoding/base64"
 	_ "encoding/hex"
 	"fmt"
 	"strconv"
@@ -298,12 +299,34 @@ func (my *Pico2_DAQ_MCU) StartSampling() (err error) {
 	return
 }
 
+
+// CRC-16 calculation using CCITT polynomial 0x11021.
+// Adapted from our C code.
+func crc16b(data []byte, n int, remainder uint16) uint16 {
+    for i := 0; i < n; i++ {
+        remainder ^= uint16(data[i]) << 8;
+        for ibit := 8; ibit > 0; ibit-- {
+            if remainder & 0x8000 > 0 {
+                remainder = (remainder << 1) ^ 0x1021;
+            } else {
+                remainder <<= 1;
+            }
+        }
+    }
+    return remainder;
+}
+
 // Returns the values of the recorded sample set i,
 // where i is counted from the oldest recorded sample (i=0).
 //
 // The Pico2 reports these values as a string of space-separated integers.
-func (my *Pico2_DAQ_MCU) GetSampleSet(i int) (vals []int, err error) {
-	cmd := fmt.Sprintf("P %d", i)
+func (my *Pico2_DAQ_MCU) GetSampleSet(i int, b64 bool) (vals []int, err error) {
+	var cmd string
+	if b64 {
+		cmd = fmt.Sprintf("B %d", i)
+	} else {
+		cmd = fmt.Sprintf("P %d", i)
+	}
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte(cmd))
 	if err != nil {
@@ -311,14 +334,56 @@ func (my *Pico2_DAQ_MCU) GetSampleSet(i int) (vals []int, err error) {
 		return
 	}
 	items := strings.Fields(string(resp))
-	n := len(items)
-	vals = make([]int, n)
-	for i := 0; i < n; i++ {
-		vals[i], err = strconv.Atoi(items[i])
+	if b64 {
+		// The two string items are a 64 character string representing
+		// the 16 24-bit analog values (encoded in base64),
+		// followed by a 4-character hexadecimal string
+		// as the CCITT CRC-16 computed over the 48-character string.
+		crc_computed := crc16b([]byte(items[0]), len(items[0]), 0xffff)
+		n := len(items[0])/4
+		var abytes []byte
+		abytes, err = base64.StdEncoding.DecodeString(items[0])
 		if err != nil {
-			err = fmt.Errorf("error while getting sample set %d, converting %s to int: %w",
-				i, items[i], err)
+			err = fmt.Errorf("error while getting sample set %d, decoding base64 %s to bytes: %w",
+				i, items[0], err)
 			return
+		}
+		var crc uint16
+		_, err = fmt.Sscanf(items[1], "%x", &crc)
+		if err != nil {
+			err = fmt.Errorf("error while getting sample set %d, decoding hex %s to uint16: %w",
+				i, items[1], err)
+			return
+		}
+		if crc != crc_computed {
+			err = fmt.Errorf("error in CRC for sample set %d: crc=0x%04x computed=0x%04x",
+				i, crc, crc_computed)
+			return
+		}
+		vals = make([]int, n)
+		for i := 0; i < n; i++ {
+			// The 24-bit value comes most significant byte first (big-endian).
+			ub := abytes[i*3]
+			hi := abytes[i*3+1]
+			lo := abytes[i*3+2]
+			v24 := (uint(ub) << 16) | (uint(hi) << 8) | uint(lo)
+			if (ub & 0x80) > 0 {
+				// Sign-extend the 24-bit value
+				v24 |= 0xff000000
+			}
+			vals[i] = int(v24)
+		}
+	} else {
+		// The items are integers in decimal format.
+		n := len(items)
+		vals = make([]int, n)
+		for i := 0; i < n; i++ {
+			vals[i], err = strconv.Atoi(items[i])
+			if err != nil {
+				err = fmt.Errorf("error while getting sample set %d, converting %s to int: %w",
+					i, items[i], err)
+				return
+			}
 		}
 	}
 	return
@@ -597,7 +662,7 @@ type SampleSelection struct {
 	Total int
 }
 
-func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.Record, err error) {
+func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(b64 bool, ss *SampleSelection) (rec edaqs.Record, err error) {
 	meta, err := my.GetRecordMetaData()
 	if err != nil {
 		err = fmt.Errorf("failed to get metadata for record: %w", err)
@@ -657,7 +722,7 @@ func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.
 		for ii >= wrapN {
 			ii -= wrapN
 		}
-		sampleData, err = my.GetSampleSet(ii)
+		sampleData, err = my.GetSampleSet(ii, b64)
 		if err != nil {
 			err = fmt.Errorf("error while getting sample set %d: %w", i, err)
 			break

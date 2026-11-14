@@ -57,7 +57,7 @@ func ex_3_immediate_short_recording(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.P
 	}
 	fmt.Println("DAQ_MCU is ready.")
 	sSelect := daq.SampleSelection{PreTrigger: 0, Total: 100}
-	rec, err := daq_mcu.GetRecordedDataByIndex(&sSelect)
+	rec, err := daq_mcu.GetRecordedDataByIndex(false, &sSelect)
 	if err != nil {
 		log.Printf("oops: %v\n", err)
 	}
