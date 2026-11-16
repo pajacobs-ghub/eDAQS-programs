@@ -710,16 +710,26 @@ func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(options *FetchOptions) (rec edaq
 		FullScaleVoltage: meta.FullScaleVoltage,
 		FullScaleCount: meta.FullScaleCount,
 	}
+	fmt.Printf("About to fetch %d samples\n", nSamplesSelected)
 	rec.AllocateDataSpace(nChannels, nSamplesSelected)
+	var packed bool
+	var printCount int
+	if options != nil {
+		packed = options.Packed
+		printCount = options.PrintCount
+	}
+	if printCount == 0 {
+		// Seems that the user did not set the option PrintCount.
+		printCount = 100
+	}
 	var sampleData []int
 	wrapN := meta.MaxNSamples;
 	// The first sample selected (the oldest) is assigned as (new) index zero.
 	jj := 0
-	var packed bool
-	if options != nil {
-		packed = options.Packed
-	}
 	for i := firstSampleSelected; i < lastSampleSelected; i++ {
+		if (jj > 0) && (jj % printCount == 0) {
+			fmt.Printf("Fetching sample %d\n", jj)
+		}
 		// We may need to unwrap the index.
 		ii := i
 		for ii < 0 {
@@ -728,7 +738,15 @@ func (my *Pico2_DAQ_MCU) GetRecordedDataByIndex(options *FetchOptions) (rec edaq
 		for ii >= wrapN {
 			ii -= wrapN
 		}
-		sampleData, err = my.GetSampleSet(ii, packed)
+		// We allow up to 3 attempts to get clean sample data
+		// that comes with a consistent CRC.
+		for attempt := 0; attempt < 3; attempt++ {
+			sampleData, err = my.GetSampleSet(ii, packed)
+			if err == nil {
+				// We have good data.
+				break
+			}
+		}
 		if err != nil {
 			err = fmt.Errorf("error while getting sample set %d: %w", i, err)
 			break
