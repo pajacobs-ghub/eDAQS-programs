@@ -84,5 +84,4 @@ func ex_4_transient_event_recording(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.P
 	if err != nil {
 		log.Printf("oops: %v\n", err)
 	}
-	return
 }

@@ -122,7 +122,7 @@ func ex_1_simple_interaction(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.Pico2_DA
 	vals, _ = daq_mcu.GetRegValues(regs)
 	fmt.Printf("after setting via map, register values: %v %v\n", regs, vals)
 	//
-	err = daq_mcu.SetOSR(daq.OSR_2048)
+	_ = daq_mcu.SetOSR(daq.OSR_2048)
 	vals, _ = daq_mcu.GetRegValues(regs)
 	fmt.Printf("after setting OSR, register values: %v %v\n", regs, vals)
 	//
@@ -140,5 +140,4 @@ func ex_1_simple_interaction(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.Pico2_DA
 	//
 	str, _ := daq_mcu.GetAllRegValuesAsString()
 	fmt.Printf("All register values= %s\n", str)
-	return
 }

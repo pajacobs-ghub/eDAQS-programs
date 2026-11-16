@@ -84,7 +84,7 @@ func (my *Pico2_DAQ_MCU) GetAllRegValuesAsString() (vals string, err error) {
 		if i > 0 {
 			builder.WriteString(", ")
 		}
-		builder.WriteString(fmt.Sprintf("%v:%d", RegIndex(i), val))
+		fmt.Fprintf(&builder, "%v:%d", RegIndex(i), val)
 	}
 	vals = builder.String()
 	return

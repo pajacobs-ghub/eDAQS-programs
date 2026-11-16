@@ -42,21 +42,21 @@ func (node *COMMS_4_MCU) Command_COMMS_MCU(btext []byte) (resp []byte, err error
 	cmdByte := btext[0]
 	_, err = node.SendMessage(btext)
 	if err != nil {
-		fmt.Errorf("error sending message: %w", err)
+		err = fmt.Errorf("error sending message: %w", err)
 		return
 	}
 	resp, _, err = node.FetchResponse()
 	if err != nil {
-		fmt.Errorf("error fetching response: %w", err)
+		err = fmt.Errorf("error fetching response: %w", err)
 		return
 	}
 	if bytes.Contains(resp, []byte("error")) {
-		err = fmt.Errorf("response contains error message: %w", string(resp))
+		err = fmt.Errorf("response contains error message: %s", string(resp))
 		return
 	}
 	resp = bytes.Trim(resp, " ")
 	if resp[0] != cmdByte {
-		err = fmt.Errorf("response string did not start with command byte: %w", string(resp))
+		err = fmt.Errorf("response string did not start with command byte: %s", string(resp))
 		return
 	}
 	resp = bytes.Trim(resp[1:], " ")
@@ -82,8 +82,8 @@ func (node *COMMS_4_MCU) Command_DAQ_MCU(btext []byte) (resp []byte, err error) 
 	resp = bytes.Trim(resp, " ")
 	var found_ok bool
 	resp, found_ok = bytes.CutSuffix(resp, []byte("ok"))
-	if found_ok == false {
-		err = fmt.Errorf("DAC_MCU response not ok: %s", resp)
+	if !found_ok {
+		err = fmt.Errorf("DAC_MCU response not ok: %s", string(resp))
 	}
 	return
 }
@@ -351,10 +351,10 @@ func (node *COMMS_4_MCU) EnableExternalTrigger(level int, slope int) (err error)
 		level = 1023
 	}
 	if slope != 0 && slope != 1 {
-		fmt.Errorf("invalid slope; should be either 1(positive) or 0(negative)")
+		err = fmt.Errorf("invalid slope; should be either 1(positive) or 0(negative)")
 		return
 	}
-	wholeCmd := fmt.Sprintf("e %d %d", level)
+	wholeCmd := fmt.Sprintf("e %d %d", level, slope)
 	_, err = node.Command_COMMS_MCU([]byte(wholeCmd))
 	if err != nil {
 		err = fmt.Errorf("could not set external trigger: %w", err)

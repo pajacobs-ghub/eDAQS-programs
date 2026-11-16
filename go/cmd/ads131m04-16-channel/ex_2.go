@@ -41,5 +41,4 @@ func ex_2_immediate_sample_set(comms_mcu *comms.COMMS_4_MCU, daq_mcu *daq.Pico2_
 			fmt.Printf("AIN%d_%d gain=%g\n", ichan, ichip, g)
 		}
 	}
-	return
 }
