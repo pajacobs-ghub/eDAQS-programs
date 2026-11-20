@@ -404,7 +404,7 @@ func (my *AVR_DAQ_MCU) GetSampleSet(i int, nChan int, packed bool) (vals []int, 
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte(cmd))
 	if err != nil {
-		err = fmt.Errorf("error getting sample set %d: %w", i, err)
+		err = fmt.Errorf("command to DAQ MCU error: %w", i, err)
 		return
 	}
 	items := strings.Fields(string(resp))
@@ -415,22 +415,19 @@ func (my *AVR_DAQ_MCU) GetSampleSet(i int, nChan int, packed bool) (vals []int, 
 		// as the CCITT CRC-16 computed over the 48-character string.
 		crc_computed := edaqs.Crc16b([]byte(items[0]), len(items[0]), 0xffff)
 		var abytes []byte
-		abytes, err = base64.StdEncoding.DecodeString(items[0])
+		abytes, err = base64.RawStdEncoding.DecodeString(items[0])
 		if err != nil {
-			err = fmt.Errorf("error while getting sample set %d, decoding base64 %s to bytes: %w",
-				i, items[0], err)
+			err = fmt.Errorf("decoding base64 %q to bytes: %w", items[0], err)
 			return
 		}
 		var crc uint16
 		_, err = fmt.Sscanf(items[1], "%x", &crc)
 		if err != nil {
-			err = fmt.Errorf("error while getting sample set %d, decoding hex %s to uint16: %w",
-				i, items[1], err)
+			err = fmt.Errorf("decoding hex %q to uint16: %w", items[1], err)
 			return
 		}
 		if crc != crc_computed {
-			err = fmt.Errorf("error in CRC for sample set %d: crc=0x%04x computed=0x%04x",
-				i, crc, crc_computed)
+			err = fmt.Errorf("crc=0x%04x computed=0x%04x", crc, crc_computed)
 			return
 		}
 		n := len(abytes)/2
@@ -449,8 +446,7 @@ func (my *AVR_DAQ_MCU) GetSampleSet(i int, nChan int, packed bool) (vals []int, 
 		for i := 0; i < n; i++ {
 			vals[i], err = strconv.Atoi(items[i])
 			if err != nil {
-				err = fmt.Errorf("error while getting sample set %d, converting %s to int: %w",
-					i, items[i], err)
+				err = fmt.Errorf("converting %q to int: %w", items[i], err)
 				return
 			}
 		}
@@ -467,12 +463,12 @@ func (my *AVR_DAQ_MCU) DidNotKeepUpDuringSampling() (flag bool, err error) {
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("k"))
 	if err != nil {
-		err = fmt.Errorf("error while checking keep-up flag: %w", err)
+		err = fmt.Errorf("getting keep-up flag: %w", err)
 		return
 	}
 	iresp, err := strconv.Atoi(strings.TrimSpace(string(resp)))
 	if err != nil {
-		err = fmt.Errorf("error while checking keep-up flag: %w", err)
+		err = fmt.Errorf("checking keep-up flag: %w", err)
 	}
 	flag = iresp == 1
 	return
@@ -484,12 +480,12 @@ func (my *AVR_DAQ_MCU) GetByteSizeOfSampleSet() (n int, err error) {
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("b"))
 	if err != nil {
-		err = fmt.Errorf("error while getting byte-size of sample set: %w", err)
+		err = fmt.Errorf("getting byte-size of sample set: %w", err)
 		return
 	}
 	n, err = strconv.Atoi(strings.TrimSpace(string(resp)))
 	if err != nil {
-		err = fmt.Errorf("error while getting byte-size of sample set: %w", err)
+		err = fmt.Errorf("converting byte-size of sample set: %w", err)
 	}
 	return
 }
@@ -502,12 +498,12 @@ func (my *AVR_DAQ_MCU) GetMaxNSamples() (n int, err error) {
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("m"))
 	if err != nil {
-		err = fmt.Errorf("error while getting max NSAMPLES: %w", err)
+		err = fmt.Errorf("command getting max NSAMPLES: %w", err)
 		return
 	}
 	n, err = strconv.Atoi(strings.TrimSpace(string(resp)))
 	if err != nil {
-		err = fmt.Errorf("error while getting max NSAMPLES: %w", err)
+		err = fmt.Errorf("converting max NSAMPLES: %w", err)
 	}
 	return
 }
@@ -516,12 +512,12 @@ func (my *AVR_DAQ_MCU) GetSizeOfSRAMInBytes() (n int, err error) {
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("T"))
 	if err != nil {
-		err = fmt.Errorf("error while getting size of SRAM: %w", err)
+		err = fmt.Errorf("command getting size of SRAM: %w", err)
 		return
 	}
 	n, err = strconv.Atoi(strings.TrimSpace(string(resp)))
 	if err != nil {
-		err = fmt.Errorf("error while getting size of SRAM: %w", err)
+		err = fmt.Errorf("converting size of SRAM: %w", err)
 	}
 	return
 }
@@ -542,12 +538,12 @@ func (my *AVR_DAQ_MCU) GetByteAddressOfOldestData() (n int, err error) {
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("a"))
 	if err != nil {
-		err = fmt.Errorf("error while getting byte address of oldest data: %w", err)
+		err = fmt.Errorf("command for byte address of oldest data: %w", err)
 		return
 	}
 	n, err = strconv.Atoi(strings.TrimSpace(string(resp)))
 	if err != nil {
-		err = fmt.Errorf("error while getting byte address of oldest data: %w", err)
+		err = fmt.Errorf("converting byte address of oldest data: %w", err)
 	}
 	return
 }
@@ -567,12 +563,12 @@ func (my *AVR_DAQ_MCU) GetByteAddressOfNextData() (n int, err error) {
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("A"))
 	if err != nil {
-		err = fmt.Errorf("error while getting byte address of next data: %w", err)
+		err = fmt.Errorf("command for byte address of next data: %w", err)
 		return
 	}
 	n, err = strconv.Atoi(strings.TrimSpace(string(resp)))
 	if err != nil {
-		err = fmt.Errorf("error while getting byte address of next data: %w", err)
+		err = fmt.Errorf("converting byte address of next data: %w", err)
 	}
 	return
 }
@@ -582,12 +578,12 @@ func (my *AVR_DAQ_MCU) GetSizeOfSRAMInPages() (n int, err error) {
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte("N"))
 	if err != nil {
-		err = fmt.Errorf("error while getting pages in SRAM: %w", err)
+		err = fmt.Errorf("command for getting pages in SRAM: %w", err)
 		return
 	}
 	n, err = strconv.Atoi(strings.TrimSpace(string(resp)))
 	if err != nil {
-		err = fmt.Errorf("error while getting pages in SRAM: %w", err)
+		err = fmt.Errorf("converting pages in SRAM: %w", err)
 	}
 	return
 }
@@ -599,14 +595,13 @@ func (my *AVR_DAQ_MCU) GetPageOfBytes(addr int) (ba []byte, err error) {
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte(cmd))
 	if err != nil {
-		err = fmt.Errorf("error while getting page of bytes: %w", err)
+		err = fmt.Errorf("command for page of bytes: %w", err)
 		return
 	}
 	var n int
 	n, err = hex.Decode(ba, resp)
 	if err != nil {
-		err = fmt.Errorf("error while getting page of bytes, %d bytes decoded from hex: %w",
-			n, err)
+		err = fmt.Errorf("page of bytes, %d bytes decoded from hex: %w", n, err)
 	}
 	return
 }
