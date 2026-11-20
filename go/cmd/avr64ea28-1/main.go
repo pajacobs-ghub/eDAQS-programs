@@ -29,7 +29,7 @@ func main() {
 	}
 	// These default values may be overridden using command-line flags.
 	portName := flag.String("port", "/dev/ttyUSB0", "Name of the serial port")
-	baud := flag.Int("baud", 115200, "Baud rate (bits per second)")
+	baud := flag.Int("baud", 230400, "Baud rate (bits per second)")
 	timeStr := flag.String("timeout", "40ms", "Timeout, with units")
 	itest := flag.Int("test", 1, "Test number (look at the source to see what is available")
 	nodeId := flag.String("id", "1", "Single character node identity")

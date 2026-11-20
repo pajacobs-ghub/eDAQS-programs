@@ -299,23 +299,6 @@ func (my *Pico2_DAQ_MCU) StartSampling() (err error) {
 	return
 }
 
-
-// CRC-16 calculation using CCITT polynomial 0x11021.
-// Adapted from our C code.
-func crc16b(data []byte, n int, remainder uint16) uint16 {
-    for i := 0; i < n; i++ {
-        remainder ^= uint16(data[i]) << 8;
-        for ibit := 8; ibit > 0; ibit-- {
-            if remainder & 0x8000 > 0 {
-                remainder = (remainder << 1) ^ 0x1021;
-            } else {
-                remainder <<= 1;
-            }
-        }
-    }
-    return remainder;
-}
-
 // Returns the values of the recorded sample set i,
 // where i is counted from the oldest recorded sample (i=0).
 func (my *Pico2_DAQ_MCU) GetSampleSet(i int, packed bool) (vals []int, err error) {
@@ -339,7 +322,7 @@ func (my *Pico2_DAQ_MCU) GetSampleSet(i int, packed bool) (vals []int, err error
 		// the 16 24-bit analog values (encoded in base64),
 		// followed by a 4-character hexadecimal string
 		// as the CCITT CRC-16 computed over the 48-character string.
-		crc_computed := crc16b([]byte(items[0]), len(items[0]), 0xffff)
+		crc_computed := edaqs.Crc16b([]byte(items[0]), len(items[0]), 0xffff)
 		n := len(items[0])/4
 		var abytes []byte
 		abytes, err = base64.StdEncoding.DecodeString(items[0])

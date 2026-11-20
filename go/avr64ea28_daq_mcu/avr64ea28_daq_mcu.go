@@ -8,6 +8,7 @@
 package avr64ea28_daq_mcu
 
 import (
+	base64 "encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"strconv"
@@ -391,10 +392,15 @@ func (my *AVR_DAQ_MCU) StartSampling() (err error) {
 
 // Returns the values of the recorded sample set i,
 // where i is counted from the oldest recorded sample (i=0).
-//
-// The AVR reports these values as a string of space-separated integers.
-func (my *AVR_DAQ_MCU) GetSampleSet(i int) (vals []int, err error) {
-	cmd := fmt.Sprintf("P %d", i)
+func (my *AVR_DAQ_MCU) GetSampleSet(i int, nChan int, packed bool) (vals []int, err error) {
+	var cmd string
+	if packed {
+		// Get sample values as a packed base64 string.
+		cmd = fmt.Sprintf("B %d", i)
+	} else {
+		// Get sample values as space-separated decimal numbers.
+		cmd = fmt.Sprintf("P %d", i)
+	}
 	var resp []byte
 	resp, err = my.comms_mcu.Command_DAQ_MCU([]byte(cmd))
 	if err != nil {
@@ -402,14 +408,51 @@ func (my *AVR_DAQ_MCU) GetSampleSet(i int) (vals []int, err error) {
 		return
 	}
 	items := strings.Fields(string(resp))
-	n := len(items)
-	vals = make([]int, n)
-	for i := 0; i < n; i++ {
-		vals[i], err = strconv.Atoi(items[i])
+	if packed {
+		// The two string items are a 64 character string representing
+		// the 16 24-bit analog values (encoded in base64),
+		// followed by a 4-character hexadecimal string
+		// as the CCITT CRC-16 computed over the 48-character string.
+		crc_computed := edaqs.Crc16b([]byte(items[0]), len(items[0]), 0xffff)
+		var abytes []byte
+		abytes, err = base64.StdEncoding.DecodeString(items[0])
 		if err != nil {
-			err = fmt.Errorf("error while getting sample set %d, converting %s to int: %w",
-				i, items[i], err)
+			err = fmt.Errorf("error while getting sample set %d, decoding base64 %s to bytes: %w",
+				i, items[0], err)
 			return
+		}
+		var crc uint16
+		_, err = fmt.Sscanf(items[1], "%x", &crc)
+		if err != nil {
+			err = fmt.Errorf("error while getting sample set %d, decoding hex %s to uint16: %w",
+				i, items[1], err)
+			return
+		}
+		if crc != crc_computed {
+			err = fmt.Errorf("error in CRC for sample set %d: crc=0x%04x computed=0x%04x",
+				i, crc, crc_computed)
+			return
+		}
+		n := len(abytes)/2
+		vals = make([]int, n)
+		for i := 0; i < n; i++ {
+			// The 16-bit value comes most significant byte first (big-endian).
+			hi := abytes[i*2]
+			lo := abytes[i*2+1]
+			v16 := (uint(hi) << 8) | uint(lo)
+			vals[i] = int(v16)
+		}
+	} else {
+		// The items are integers in decimal format.
+		n := len(items)
+		vals = make([]int, n)
+		for i := 0; i < n; i++ {
+			vals[i], err = strconv.Atoi(items[i])
+			if err != nil {
+				err = fmt.Errorf("error while getting sample set %d, converting %s to int: %w",
+					i, items[i], err)
+				return
+			}
 		}
 	}
 	return
@@ -718,17 +761,14 @@ func (my *AVR_DAQ_MCU) GetRecordMetaData() (m RecordMetaData, err error) {
 	return
 }
 
-type SampleSelection struct {
+type FetchOptions struct {
 	PreTrigger int
-	Total int
+	TotalSamples int
+	Packed bool
+	PrintCount int
 }
 
-// This is a fairly slow way to get the full set of recorded samples
-// because the AVR is doing all of the house-keeping and returning the
-// sampled values as text strings.
-// It will be faster to fetch the SRAM data in and then unpack the
-// sample values on the PC.
-func (my *AVR_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.Record, err error) {
+func (my *AVR_DAQ_MCU) GetRecordedDataByIndex(options *FetchOptions) (rec edaqs.Record, err error) {
 	meta, err := my.GetRecordMetaData()
 	if err != nil {
 		err = fmt.Errorf("failed to get metadata for record: %w", err)
@@ -745,22 +785,22 @@ func (my *AVR_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.Re
 	nSamplesSelected := meta.NSamplesInRecord
 	nSamplesPreTrigger := meta.NSamplesPreTrigger
 	// We might want to adjust the selection of samples to be a subset of the full record.
-	if ss != nil {
+	if options != nil {
 		if meta.Mode == IMMEDIATE {
 			// For IMMEDIATE mode, the trigger sample is always at index zero.
 			// There are no sample data at the other end of SRAM to wrap around.
 			firstSampleSelected = 0
-			lastSampleSelected = firstSampleSelected + ss.Total
-			nSamplesSelected = ss.Total
+			lastSampleSelected = firstSampleSelected + options.TotalSamples
+			nSamplesSelected = options.TotalSamples
 			nSamplesPreTrigger = 0
 		} else {
 			// Because of potential wrap-around for other trigger modes,
 			// it may be that the selected first-sample index is zero.
 			// We will hanfle this wrap-around below.
-			firstSampleSelected = meta.TriggerSample - ss.PreTrigger
-			lastSampleSelected = firstSampleSelected + ss.Total
-			nSamplesSelected = ss.Total
-			nSamplesPreTrigger = ss.PreTrigger
+			firstSampleSelected = meta.TriggerSample - options.PreTrigger
+			lastSampleSelected = firstSampleSelected + options.TotalSamples
+			nSamplesSelected = options.TotalSamples
+			nSamplesPreTrigger = options.PreTrigger
 		}
 	}
 	// Prepare the record of data that gets returned.
@@ -773,12 +813,26 @@ func (my *AVR_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.Re
 		FullScaleVoltage: meta.FullScaleVoltage,
 		FullScaleCount: meta.FullScaleCount,
 	}
+	fmt.Printf("About to fetch %d samples\n", nSamplesSelected)
 	rec.AllocateDataSpace(nChannels, nSamplesSelected)
+	var packed bool
+	var printCount int
+	if options != nil {
+		packed = options.Packed
+		printCount = options.PrintCount
+	}
+	if printCount == 0 {
+		// Seems that the user did not set the option PrintCount.
+		printCount = 100
+	}
 	var sampleData []int
 	wrapN := meta.MaxNSamples;
 	// The first sample selected (the oldest) is assigned as (new) index zero.
 	jj := 0
 	for i := firstSampleSelected; i < lastSampleSelected; i++ {
+		if (jj > 0) && (jj % printCount == 0) {
+			fmt.Printf("Fetching sample %d\n", jj)
+		}
 		// We may need to unwrap the index.
 		ii := i
 		for ii < 0 {
@@ -787,7 +841,15 @@ func (my *AVR_DAQ_MCU) GetRecordedDataByIndex(ss *SampleSelection) (rec edaqs.Re
 		for ii >= wrapN {
 			ii -= wrapN
 		}
-		sampleData, err = my.GetSampleSet(ii)
+		// We allow up to 3 attempts to get clean sample data
+		// that comes with a consistent CRC.
+		for attempt := 0; attempt < 3; attempt++ {
+			sampleData, err = my.GetSampleSet(ii, nChannels, packed)
+			if err == nil {
+				// We have good data.
+				break
+			}
+		}
 		if err != nil {
 			err = fmt.Errorf("error while getting sample set %d: %v", i, err)
 			break
