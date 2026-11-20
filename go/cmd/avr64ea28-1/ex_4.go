@@ -48,7 +48,7 @@ func ex_4_transient_event_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 	_ = daq_mcu.SetPGA(daq.X4)
 	_ = daq_mcu.SetAnalogRefVoltage(daq.Vref1024)
 	//
-	_ = daq_mcu.SetSamplePeriod_us(1000)
+	_ = daq_mcu.SetSamplePeriod_us(250)
 	_ = daq_mcu.SetTriggerInternal(0, 50, daq.SLOPE_POS)
 	_ = daq_mcu.SetNSamples(100)
 	//
@@ -75,7 +75,7 @@ func ex_4_transient_event_recording(comms_mcu *comms.COMMS_1_MCU, daq_mcu *daq.A
 		time.Sleep(1 * time.Second)
 	}
 	fmt.Println("DAQ_MCU is ready.")
-	options := daq.FetchOptions{PreTrigger: 50, TotalSamples: 150, Packed: true}
+	options := daq.FetchOptions{PreTrigger: 50, TotalSamples: 150, Packed: false}
 	rec, err := daq_mcu.GetRecordedDataByIndex(&options)
 	if err != nil {
 		log.Printf("oops: %v\n", err)
