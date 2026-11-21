@@ -325,7 +325,7 @@ func (my *Pico2_DAQ_MCU) GetSampleSet(i int, packed bool) (vals []int, err error
 		crc_computed := edaqs.Crc16b([]byte(items[0]), len(items[0]), 0xffff)
 		n := len(items[0])/4
 		var abytes []byte
-		abytes, err = base64.StdEncoding.DecodeString(items[0])
+		abytes, err = base64.RawStdEncoding.DecodeString(items[0])
 		if err != nil {
 			err = fmt.Errorf("error while getting sample set %d, decoding base64 %s to bytes: %w",
 				i, items[0], err)
