@@ -436,8 +436,9 @@ func (my *AVR_DAQ_MCU) GetSampleSet(i int, nChan int, packed bool) (vals []int, 
 			// The 16-bit value comes most significant byte first (big-endian).
 			hi := abytes[i*2]
 			lo := abytes[i*2+1]
-			v16 := (uint(hi) << 8) | uint(lo)
-			vals[i] = int(v16)
+			v := (uint(hi) << 8) | uint(lo)
+			// Reinterpret as a signed value.
+			vals[i] = int(int16(v))
 		}
 	} else {
 		// The items are integers in decimal format.
